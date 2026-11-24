@@ -29,6 +29,8 @@ STATUS_RANK: dict[str, tuple[int, ParcelStatus]] = {
     "53": (50, ParcelStatus.OUT_FOR_DELIVERY),
     "P2": (60, ParcelStatus.AT_PICKUP_POINT),
     "82": (60, ParcelStatus.AT_PICKUP_POINT),
+    # Carrier-neutral code used by providers for "posted back"/"returned".
+    "RETURNING": (70, ParcelStatus.RETURNING),
     "91": (90, ParcelStatus.DELIVERED),
 }
 
@@ -60,6 +62,9 @@ def parse_iso(value: str | None) -> datetime | None:
 
 
 def _event_timestamp(event: dict[str, Any]) -> str | None:
+    # Providers with full ISO timestamps (Allegro) set ``timestamp`` directly.
+    if event.get("timestamp"):
+        return str(event["timestamp"])
     date = event.get("date")
     if not date:
         return None

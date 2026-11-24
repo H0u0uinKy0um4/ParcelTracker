@@ -12,9 +12,11 @@ from typing import Any, Protocol, runtime_checkable
 
 from ..models import ProviderParcel
 
-#: Injected HTTP helper: ``await fetch_json(url) -> decoded JSON``.
+#: Injected HTTP helper: ``await fetch_json(url, method="GET") -> decoded JSON``.
+#: The optional keyword lets a keyless carrier endpoint that requires POST
+#: (Packeta) use the same helper; the default stays GET for all other carriers.
 #: Home Assistant supplies a thin aiohttp wrapper; tests supply a fixture.
-JsonFetcher = Callable[[str], Awaitable[Any]]
+JsonFetcher = Callable[..., Awaitable[Any]]
 
 
 @runtime_checkable
@@ -90,4 +92,9 @@ def provider_instance(carrier_id: str) -> TrackingProvider | None:
 
 
 # Importing registers providers. Keep this at the bottom to avoid cycles.
+# Registration order is also detection precedence. Packeta's ``Z`` + ten
+# digits also fits the generic postal shape, so it must be matched first;
+# Allegro waybills contain mixed letters and cannot collide with ČP codes.
+from . import packeta  # noqa: E402,F401
 from . import ceska_posta  # noqa: E402,F401
+from . import allegro  # noqa: E402,F401

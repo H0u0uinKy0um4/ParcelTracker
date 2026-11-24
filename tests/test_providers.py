@@ -1,4 +1,4 @@
-"""Tests for the ČP/Balíkovna JSON provider."""
+"""Tests for the ČP, Allegro and Packeta JSON providers."""
 
 from __future__ import annotations
 
@@ -17,10 +17,14 @@ from custom_components.parceltracker.providers import (
     registered_providers,
     register_provider,
 )
+from custom_components.parceltracker.providers.allegro import AllegroProvider
 from custom_components.parceltracker.providers.ceska_posta import CeskaPostaProvider
+from custom_components.parceltracker.providers.packeta import PacketaProvider
 
 
 CODE = "DR1234567890C"
+PACKETA_CODE = "Z6027037619"
+ALLEGRO_CODE = "A0069G83L2"
 
 BACKBONE: dict[str, Any] = {
     CODE: {
@@ -70,9 +74,12 @@ class ProviderTests(unittest.TestCase):
     def test_registry_detects_carrier(self) -> None:
         self.assertIs(detect_provider(CODE), CeskaPostaProvider)
         self.assertEqual(
-            [provider.CARRIER_ID for provider in registered_providers()], ["ceska_posta"]
+            [provider.CARRIER_ID for provider in registered_providers()],
+            ["packeta", "ceska_posta", "allegro"],
         )
         self.assertIsNotNone(get_provider("ceska_posta"))
+        self.assertIs(detect_provider(PACKETA_CODE), PacketaProvider)
+        self.assertIs(detect_provider(ALLEGRO_CODE), AllegroProvider)
         self.assertTrue(CeskaPostaProvider.match_tracking_code("12345678"))
         self.assertFalse(CeskaPostaProvider.match_tracking_code("NOT-A-CODE"))
 
@@ -167,6 +174,146 @@ class ProviderTests(unittest.TestCase):
         )
         self.assertIn("error", parcels[CODE].raw or {})
         self.assertIsNotNone(parcels[CODE].error)
+
+
+PACKETA_PAYLOAD: dict[str, Any] = {
+    "status": "success",
+    "item": {
+        "barcode": "6027037619",
+        "packetStatus": "The package has been delivered",
+        "storedUntil": "2026-10-16",
+        "sender": "Example sender",
+        "orderNumber": "0000000000",
+        "branchAddress": "Z-BOX Example City",
+        "trackingDetails": [
+            {
+                "time": "2026-10-12 15:43:02",
+                "text": "We are aware of your parcel and are waiting for the sender to hand it over to us.",
+            },
+            {
+                "time": "2026-10-13 17:47:30",
+                "text": "The parcel is ready for pickup. Z-BOX Example City",
+            },
+            {
+                "time": "2026-10-13 19:41:46",
+                "text": "The parcel is with you. Thank you.",
+            },
+        ],
+    },
+}
+
+ALLEGRO_PAYLOAD: dict[str, Any] = {
+    "status": [
+        {
+            "eventTimestamp": "2026-11-24T13:51:31Z",
+            "description": "Parcel has been delivered",
+        },
+        {
+            "eventTimestamp": "2026-11-23T17:18:15Z",
+            "description": "Parcel is awaiting pick-up",
+        },
+        {
+            "eventTimestamp": "2026-11-18T17:14:30.446Z",
+            "description": "Parcel has been prepared by the sender",
+        },
+    ]
+}
+
+
+def fake_multi_fetch(
+    calls: list[tuple[str, str]],
+    payloads: dict[str, Any],
+    *,
+    fail: bool = False,
+):
+    """Record method + URL and return a payload keyed by tracking code."""
+
+    async def fetch(url: str, *, method: str = "GET") -> Any:
+        calls.append((method, url))
+        if fail:
+            raise OSError("network down")
+        if "getPacketById" in url:
+            code = url.split("/getPacketById/", 1)[1].split("/", 1)[0]
+        else:
+            code = url.split("packageNo=", 1)[1]
+        return payloads.get(code, {})
+
+    return fetch
+
+
+class NewCarrierTests(unittest.TestCase):
+    def test_packeta_uses_post_and_maps_events(self) -> None:
+        calls: list[tuple[str, str]] = []
+        parcel = asyncio.run(
+            PacketaProvider().async_track(
+                [PACKETA_CODE],
+                fake_multi_fetch(calls, {PACKETA_CODE: PACKETA_PAYLOAD}),
+            )
+        )[PACKETA_CODE]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "POST")
+        self.assertIn("getPacketById/Z6027037619/en", calls[0][1])
+        self.assertEqual(parcel.carrier, "packeta")
+        self.assertEqual(parcel.sender, "Example sender")
+        self.assertEqual(parcel.pickup_point, "Z-BOX Example City")
+        self.assertEqual(parcel.stored_to, "2026-10-16")
+        self.assertEqual(
+            [event["id"] for event in parcel.events], ["-L", "P2", "91"]
+        )
+        self.assertEqual(parcel.events[0]["timestamp"], "2026-10-12T15:43:02")
+        self.assertEqual(derive_status(parcel.events), ParcelStatus.DELIVERED)
+
+        canonical = normalize_parcel(parcel, include_history=True)
+        self.assertTrue(canonical["delivered"])
+        self.assertEqual(canonical["delivered_at"], "2026-10-13T19:41:46")
+        self.assertIn("?id=Z6027037619", canonical["url"])
+        self.assertEqual(
+            [entry["status"] for entry in canonical["history"]],
+            ["registered", "at_pickup_point", "delivered"],
+        )
+        self.assertEqual(len(canonical["history"]), 3)
+
+    def test_packeta_missing_item_is_not_found(self) -> None:
+        calls: list[tuple[str, str]] = []
+        parcel = asyncio.run(
+            PacketaProvider().async_track(
+                ["Z0000000000"], fake_multi_fetch(calls, {})
+            )
+        )["Z0000000000"]
+        self.assertTrue(parcel.not_found)
+        self.assertIsNotNone(parcel.error)
+        self.assertEqual(normalize_parcel(parcel)["status"], "unknown")
+
+    def test_allegro_sorts_events_and_maps_status(self) -> None:
+        calls: list[tuple[str, str]] = []
+        parcel = asyncio.run(
+            AllegroProvider().async_track(
+                [ALLEGRO_CODE],
+                fake_multi_fetch(calls, {ALLEGRO_CODE: ALLEGRO_PAYLOAD}),
+            )
+        )[ALLEGRO_CODE]
+        self.assertEqual(calls[0][0], "GET")
+        self.assertIn("packageNo=A0069G83L2", calls[0][1])
+        self.assertEqual(
+            [event["id"] for event in parcel.events], ["-L", "P2", "91"]
+        )
+        self.assertEqual(derive_status(parcel.events), ParcelStatus.DELIVERED)
+        canonical = normalize_parcel(parcel, include_history=True)
+        self.assertTrue(canonical["delivered"])
+        self.assertEqual(canonical["delivered_at"], "2026-11-24T13:51:31Z")
+        self.assertEqual(canonical["raw_status"], "Parcel has been delivered")
+        self.assertEqual(len(canonical["history"]), 3)
+
+    def test_allegro_failure_is_reported_not_raised(self) -> None:
+        calls: list[tuple[str, str]] = []
+        parcels = asyncio.run(
+            AllegroProvider().async_track(
+                [ALLEGRO_CODE],
+                fake_multi_fetch(calls, {}, fail=True),
+            )
+        )
+        self.assertIsNotNone(parcels[ALLEGRO_CODE].error)
+        self.assertEqual(parcels[ALLEGRO_CODE].events, [])
 
 
 if __name__ == "__main__":

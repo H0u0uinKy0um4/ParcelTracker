@@ -9,7 +9,6 @@ from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
 from pathlib import Path
-import re
 import unittest
 
 from custom_components.parceltracker.parsers import (
@@ -18,6 +17,20 @@ from custom_components.parceltracker.parsers import (
     parse_email_text,
     parse_message,
 )
+
+
+EXPECTED_EXAMPLE_MAILS: dict[str, tuple[str, str | None]] = {
+    "Potvrzení o převzetí balíku NR0000000000CZ.eml": (
+        "NR0000000000CZ",
+        "ceska_posta",
+    ),
+    "Váš balík NR0000000000CZ je v našich rukách.eml": (
+        "NR0000000000CZ",
+        "ceska_posta",
+    ),
+    "example-packeta.eml": ("Z0000000000", "packeta"),
+    "example-allegro.eml": ("A0000G0000", "allegro"),
+}
 
 
 SAMPLE_BODY = """Dobrý den,
@@ -95,25 +108,40 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parsed.pickup_code, "NR0000000000CZ")
         self.assertEqual(parsed.carrier, "ceska_posta")
 
+    def test_packeta_code_with_spaces(self) -> None:
+        parsed = parse_email_text("Číslo zásilky Z 602 7037 619")
+        self.assertEqual(parsed.tracking_code, "Z6027037619")
+        self.assertEqual(parsed.carrier, "packeta")
+
+    def test_allegro_waybill(self) -> None:
+        parsed = parse_email_text("Dopravce a podací číslo zásilky\nAllegro A0069G83L2")
+        self.assertEqual(parsed.tracking_code, "A0069G83L2")
+        self.assertEqual(parsed.carrier, "allegro")
+
+    def test_postal_code_wins_over_generic_alphanumeric(self) -> None:
+        parsed = parse_email_text("Číslo zásilky: A123456789CZ")
+        self.assertEqual(parsed.tracking_code, "A123456789CZ")
+        self.assertEqual(parsed.carrier, "ceska_posta")
+
     def test_real_example_mails(self) -> None:
-        """Every provided .eml must parse without inventing a redacted code."""
+        """Every provided .eml must parse to its known, anonymised code."""
         path = Path(__file__).resolve().parents[1] / "exampleMails"
         mails = sorted(path.glob("*.eml")) if path.is_dir() else []
         if not mails:
             self.skipTest("no example mail present")
 
+        seen = 0
         for mail in mails:
             with self.subTest(mail=mail.name):
+                expected, carrier = EXPECTED_EXAMPLE_MAILS[mail.name]
                 with mail.open("rb") as handle:
                     message = BytesParser(policy=policy.default).parse(handle)
                 parsed = parse_message(message)
-                subject = str(message.get("Subject") or "")
-                match = re.search(r"[A-Z]{2}\d{9,11}[A-Z]{0,2}", subject.upper())
-                expected = match.group(0) if match else None
                 self.assertEqual(parsed.tracking_code, expected)
                 self.assertIn(parsed.pickup_code, (None, expected))
-                if expected:
-                    self.assertEqual(parsed.carrier, "ceska_posta")
+                self.assertEqual(parsed.carrier, carrier)
+                seen += 1
+        self.assertEqual(seen, len(EXPECTED_EXAMPLE_MAILS))
 
 
 def _html_message(html: str) -> EmailMessage:

@@ -17,7 +17,7 @@ from email.message import Message
 from html.parser import HTMLParser
 import re
 import unicodedata
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 
 @dataclass(slots=True)
@@ -67,6 +67,27 @@ _LABELS: dict[str, tuple[re.Pattern[str], ...]] = {
 POSTAL_CODE_RE = re.compile(r"\b[A-Z]{1,2}\d{9,11}[A-Z]{0,2}\b")
 NUMERIC_CODE_RE = re.compile(r"\b\d{6,13}\b")
 LABEL_SPLIT_RE = re.compile(r"\s*[:#]\s*")
+
+# Other carriers write their numbers with spaces or mixed letters/digits.
+# Each pattern returns the compact, uppercase form stored as ``barcode``.
+# Postal codes are still scanned first, so ambiguous shapes stay with ČP.
+CARRIER_CODE_PATTERNS: tuple[tuple[re.Pattern[str], Callable[[str], str]], ...] = (
+    # Packeta / Zásilkovna: "Z 602 7037 619" -> "Z6027037619".
+    (
+        re.compile(r"\bZ\s*\d(?:\s*\d){9}\b", re.IGNORECASE),
+        lambda value: re.sub(r"\s+", "", value).upper(),
+    ),
+    # Allegro One internal waybill: "A0069G83L2".
+    (
+        re.compile(r"\bA\d[A-Z0-9]{8,11}\b", re.IGNORECASE),
+        lambda value: value.upper(),
+    ),
+)
+
+
+def _is_carrier_code(code: str) -> bool:
+    """Whether a code came from one of the non-postal carrier patterns."""
+    return any(pattern.fullmatch(code) for pattern, _ in CARRIER_CODE_PATTERNS)
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -187,13 +208,19 @@ def _codes_in(
     upper = text.upper()
     found: list[str] = []
 
-    def add(match: re.Match[str], group: int = 0) -> None:
-        value = (match.group(group) or "").strip().upper()
+    def add_value(value: str) -> None:
+        value = value.strip().upper()
         if _valid_code(value) and value not in found:
             found.append(value)
 
+    def add(match: re.Match[str], group: int = 0) -> None:
+        add_value(match.group(group) or "")
+
     for match in POSTAL_CODE_RE.finditer(upper):
         add(match)
+    for pattern, compact in CARRIER_CODE_PATTERNS:
+        for match in pattern.finditer(upper):
+            add_value(compact(match.group(0)))
     for pattern in extra_patterns:
         for match in pattern.finditer(text):
             add(match, 1 if match.groups() else 0)
@@ -282,7 +309,8 @@ def find_tracking_numbers(
         return labelled
     unlabelled = _codes_in(normalized, patterns, allow_numeric=allow_numeric)
     postal = [code for code in unlabelled if POSTAL_CODE_RE.fullmatch(code)]
-    return postal or (unlabelled[:1] if allow_numeric else [])
+    carrier_codes = [code for code in unlabelled if _is_carrier_code(code)]
+    return postal or carrier_codes or (unlabelled[:1] if allow_numeric else [])
 
 
 def parse_email_text(

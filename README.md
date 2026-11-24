@@ -19,11 +19,14 @@ container or add-on is required.
    - `Číslo balíku` → pickup code (attribute and sensor).
    If the body has no number, the decoded Subject and tracking links are used
    transiently as fallbacks. Nothing from the email is retained verbatim.
-3. A pluggable provider queries the carrier. The first provider uses the
-   **keyless public JSON endpoints** of Česká pošta / Balíkovna — no API key,
-   no HTML scraping:
-   - `https://b2c.cpost.cz/services/ParcelHistory/getDataAsJson?idParcel=…&language=en` (batches of 10),
-   - `https://www.balikovna.cz/o/cpb/package/<code>?lang=en_US` (enrichment).
+3. A pluggable provider queries the carrier. All carriers use **keyless public
+   JSON endpoints** — no API key, no HTML scraping:
+   - Česká pošta / Balíkovna: `https://b2c.cpost.cz/services/ParcelHistory/getDataAsJson?idParcel=…&language=en`
+     (batches of 10) and `https://www.balikovna.cz/o/cpb/package/<code>?lang=en_US`,
+   - Allegro One: `https://edge.allegro.pl/ad/tracking?packageNo=<code>`
+     (undocumented edge endpoint, GET),
+   - Packeta / Zásilkovna: `POST https://tracking.packeta.com/api/getPacketById/<code>/en`
+     (the one keyless endpoint that requires POST).
 4. Parcels are stored via Home Assistant `Store` and published with the
    canonical `ha-parcel-integrations` shape, so `ha-parcel-aggregator` can
    consume them. **Do not install `ha-ceska-posta` alongside this integration**
@@ -34,15 +37,16 @@ container or add-on is required.
 | Carrier | Status | Provider ID |
 |---|---|---|
 | Česká pošta / Balíkovna | Implemented | `ceska_posta` |
-| Zásilkovna / Simpla | Planned | — |
+| Allegro One | Implemented (unofficial edge endpoint) | `allegro` |
+| Packeta / Zásilkovna | Implemented (POST web endpoint) | `packeta` |
 | DPD CZ | Planned | — |
 | PPL CZ | Planned | — |
 | GLS CZ, Geis, DHL, InPost | Planned | — |
 
 The architecture is multi-carrier from day one: one config entry is one
 mailbox, and carriers are independent provider modules. Adding a carrier means
-adding one module, one fixture, one docs row and EN/CS strings — no changes to
-entities, coordinator or storage.
+adding one module, one fixture, one docs row and EN/CS strings — no
+carrier-specific changes to entities, coordinator or storage.
 
 ### Installation
 
@@ -90,9 +94,9 @@ transit, 60 min when idle or at night (00:00–06:00). Email is always polled.
 
 - Raw email subject and body are never stored in attributes. Only the two
   numbers, carrier data and timestamps are kept.
-- The carrier endpoints are public but unofficial and may change. A failed
-  request keeps the cached state and sets `unknown` rather than breaking the
-  integration.
+- The carrier endpoints are public but unofficial (especially Allegro's edge
+  endpoint) and may change. A failed request keeps the cached state and sets
+  `unknown` rather than breaking the integration.
 - These endpoints are intended for senders/recipients checking their own
   parcels. Do not redistribute the data.
 - Nothing here sends mail or modifies messages other than optionally marking
@@ -125,8 +129,14 @@ Docker ani doplněk.
    - `Číslo balíku` → číslo balíku k vyzvednutí (atribut a senzor).
    Pokud tělo číslo neobsahuje, dočasně se použije dekódovaný předmět a odkazy
    na sledování. Nic z e-mailu se neuchovává doslovně.
-3. Provider se dotáže dopravce. První provider používá **veřejné JSON endpointy
-   bez klíče** České pošty / Balíkovny — bez API klíče a bez parsování HTML.
+3. Provider se dotáže dopravce. Všichni dopravci používají **veřejné JSON
+   endpointy bez klíče** — bez API klíče a bez parsování HTML:
+   - Česká pošta / Balíkovna: `https://b2c.cpost.cz/services/ParcelHistory/getDataAsJson?idParcel=…&language=en`
+     (dávky po 10) a `https://www.balikovna.cz/o/cpb/package/<code>?lang=en_US`,
+   - Allegro One: `https://edge.allegro.pl/ad/tracking?packageNo=<code>`
+     (neoficiální edge endpoint, GET),
+   - Packeta / Zásilkovna: `POST https://tracking.packeta.com/api/getPacketById/<code>/en`
+     (jediný keyless endpoint, který vyžaduje POST).
 4. Balíky se ukládají přes `Store` a vystavují v kanonickém formátu rodiny
    `ha-parcel-integrations`, takže je umí zpracovat `ha-parcel-aggregator`.
    **Neinstalujte vedle této integrace `ha-ceska-posta`**, jinak se balíky
@@ -137,7 +147,8 @@ Docker ani doplněk.
 | Dopravce | Stav | ID provideru |
 |---|---|---|
 | Česká pošta / Balíkovna | Implementováno | `ceska_posta` |
-| Zásilkovna / Simpla | Plánováno | — |
+| Allegro One | Implementováno (neoficiální edge endpoint) | `allegro` |
+| Packeta / Zásilkovna | Implementováno (POST web endpoint) | `packeta` |
 | DPD CZ | Plánováno | — |
 | PPL CZ | Plánováno | — |
 | GLS CZ, Geis, DHL, InPost | Plánováno | — |
@@ -145,7 +156,7 @@ Docker ani doplněk.
 Architektura je od začátku multi-carrier: jedna konfigurační položka = jedna
 schránka, dopravci jsou samostatné moduly. Přidání dopravce znamená nový modul,
 fixture, řádek v tabulce a překlady EN/CS — entity, koordinátor ani úložiště se
-nemění.
+nemění specificky pro dopravce.
 
 ### Instalace
 
@@ -193,8 +204,9 @@ nečinnosti a v noci (00:00–06:00). E-mail se vždy kontroluje.
 
 - Předmět a tělo e-mailu se do atributů nikdy neukládají. Uchováváme jen obě
   čísla, data z dopravce a časové značky.
-- Endpointy dopravce jsou veřejné, ale neoficiální a mohou se změnit. Při
-  selhání se zachová poslední známý stav a integrace nespadne.
+- Endpointy dopravce jsou veřejné, ale neoficiální (zejména Allegro edge
+  endpoint) a mohou se změnit. Při selhání se zachová poslední známý stav a
+  integrace nespadne.
 - Endpointy jsou určeny pro odesílatele/adresáty kontrolující vlastní balíky.
   Data dál nešířte.
 - Integrace neodesílá e-maily a s zprávami nemanipuluje, kromě volitelného

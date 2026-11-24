@@ -12,8 +12,8 @@ import unittest
 
 from custom_components.parceltracker.const import DEFAULT_IMAP_HOST, DOMAIN, PLATFORMS
 from custom_components.parceltracker.parsers import (
-    decode_email_body,
     decode_header_value,
+    decode_part,
 )
 
 
@@ -57,7 +57,14 @@ class MetadataTests(unittest.TestCase):
         readme = (COMPONENT.parents[1] / "README.md").read_text(encoding="utf-8")
         self.assertIn("## English", readme)
         self.assertIn("## Česky", readme)
-        self.assertIn("ceska_posta", readme)
+        for carrier in ("ceska_posta", "allegro", "packeta"):
+            self.assertIn(carrier, readme)
+
+    def test_fetch_helper_supports_method(self) -> None:
+        """The shared HTTP helper must allow the Packeta POST exception."""
+        source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+        self.assertIn('method: str = "GET"', source)
+        self.assertIn("self._session.request(", source)
 
     def test_no_raw_email_fields_in_entities(self) -> None:
         source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
@@ -73,7 +80,19 @@ class MetadataTests(unittest.TestCase):
             "Zbyněk",
             "Augusta",
             "dalibordvorak",
+            "Dalibor",
+            "Dvorak",
+            "rcsvet",
+            "Rilská",
+            "Modřany",
             "NR0224957370Y",
+            "Z6027037619",
+            "Z 602 7037 619",
+            "A0069G83L2",
+            "394421940",
+            "18590591983",
+            "17311083990",
+            "143488659",
             "@gmail.com",
         )
         for mail in mails:
@@ -81,12 +100,19 @@ class MetadataTests(unittest.TestCase):
                 message = BytesParser(policy=policy.default).parsebytes(
                     mail.read_bytes()
                 )
-                text = decode_email_body(message) + " " + " ".join(
+                parts = [
+                    decode_part(part)
+                    for part in message.walk()
+                    if not part.is_multipart()
+                    and part.get_content_type() in ("text/plain", "text/html")
+                ]
+                text = " ".join(parts) + " " + " ".join(
                     decode_header_value(message.get(header))
                     for header in ("From", "To", "Subject", "Message-ID")
                 )
+                lowered = text.casefold()
                 for value in forbidden:
-                    self.assertNotIn(value, text)
+                    self.assertNotIn(value.casefold(), lowered)
 
 
 if __name__ == "__main__":
