@@ -1,0 +1,80 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Připojit burner schránku",
+        "description": "Zprávy přeposlané od dopravců se čtou z této Gmail schránky přes IMAP. Použijte heslo pro aplikaci, ne své běžné heslo.",
+        "data": {
+          "email": "Gmail adresa",
+          "app_password": "Heslo pro aplikaci",
+          "imap_host": "IMAP server",
+          "imap_port": "IMAP port",
+          "mailbox": "Schránka / štítek",
+          "scan_interval": "Interval dotazování (minuty)",
+          "sender_allowlist": "Povolení odesílatelé (odděleno čárkou, volitelné)",
+          "extra_tracking_regex": "Extra regex pro číslo zásilky (jedna na řádek, volitelné)",
+          "mark_seen": "Označit zpracované zprávy jako přečtené",
+          "include_history": "Ukládat historii událostí do atributů"
+        }
+      }
+    },
+    "error": {
+      "invalid_email": "Zadejte platnou e-mailovou adresu.",
+      "invalid_auth": "Gmail odmítl adresu nebo heslo pro aplikaci. Zapněte dvoufázové ověření a vytvořte heslo pro aplikaci.",
+      "cannot_connect": "Nelze se připojit k IMAP serveru. Zkontrolujte server, port a zda je v Gmailu zapnutý IMAP."
+    },
+    "abort": {
+      "already_configured": "Tato schránka už je nakonfigurovaná."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti ParcelTrackeru",
+        "description": "Vyberte, co chcete změnit.",
+        "menu_options": {
+          "general": "Dotazování a parsování",
+          "credentials": "Gmail přihlašovací údaje"
+        }
+      },
+      "general": {
+        "title": "Dotazování a parsování",
+        "data": {
+          "imap_host": "IMAP server",
+          "imap_port": "IMAP port",
+          "mailbox": "Schránka / štítek",
+          "scan_interval": "Interval dotazování (minuty)",
+          "sender_allowlist": "Povolení odesílatelé (odděleno čárkou, volitelné)",
+          "extra_tracking_regex": "Extra regex pro číslo zásilky (jedna na řádek, volitelné)",
+          "mark_seen": "Označit zpracované zprávy jako přečtené",
+          "include_history": "Ukládat historii událostí do atributů"
+        }
+      },
+      "credentials": {
+        "title": "Gmail přihlašovací údaje",
+        "data": {
+          "email": "Gmail adresa",
+          "app_password": "Heslo pro aplikaci"
+        }
+      }
+    },
+    "error": {
+      "invalid_email": "Zadejte platnou e-mailovou adresu.",
+      "invalid_auth": "Gmail odmítl adresu nebo heslo pro aplikaci.",
+      "cannot_connect": "Nelze se připojit k IMAP serveru."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": { "name": "Stav" },
+      "last_event": { "name": "Poslední událost" },
+      "pickup_code": { "name": "Číslo balíku" }
+    },
+    "binary_sensor": {
+      "delivered": { "name": "Doručeno" }
+    },
+    "button": {
+      "refresh": { "name": "Obnovit balíky" }
+    }
+  }
+}

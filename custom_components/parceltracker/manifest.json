@@ -1,0 +1,12 @@
+{
+  "domain": "parceltracker",
+  "name": "ParcelTracker",
+  "codeowners": ["@H0u0uinKy0um4"],
+  "config_flow": true,
+  "documentation": "https://github.com/H0u0uinKy0um4/ParcelTracker",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/H0u0uinKy0um4/ParcelTracker/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

@@ -1,0 +1,210 @@
+# ParcelTracker
+
+[English](#english) · [Česky](#cesky)
+
+## English
+
+ParcelTracker is a **HACS custom integration for Home Assistant**. It reads
+forwarded carrier emails from a dedicated Gmail inbox, extracts tracking
+numbers, queries the carrier and exposes each parcel as Home Assistant
+entities. No separate service, container or add-on is required.
+
+### How it works
+
+1. A burner Gmail account receives forwarded delivery notices.
+2. The integration reads the mailbox over IMAP (standard library, no extra
+   requirements) and extracts:
+   - `Číslo zásilky` → tracking number (canonical `barcode`),
+   - `Číslo balíku` → pickup code (attribute and sensor).
+   If the body has no number, the decoded Subject and tracking links are used
+   transiently as fallbacks. Nothing from the email is retained verbatim.
+3. A pluggable provider queries the carrier. The first provider uses the
+   **keyless public JSON endpoints** of Česká pošta / Balíkovna — no API key,
+   no HTML scraping:
+   - `https://b2c.cpost.cz/services/ParcelHistory/getDataAsJson?idParcel=…&language=en` (batches of 10),
+   - `https://www.balikovna.cz/o/cpb/package/<code>?lang=en_US` (enrichment).
+4. Parcels are stored via Home Assistant `Store` and published with the
+   canonical `ha-parcel-integrations` shape, so `ha-parcel-aggregator` can
+   consume them. **Do not install `ha-ceska-posta` alongside this integration**
+   or the same parcels will appear twice.
+
+### Supported carriers
+
+| Carrier | Status | Provider ID |
+|---|---|---|
+| Česká pošta / Balíkovna | Implemented | `ceska_posta` |
+| Zásilkovna / Simpla | Planned | — |
+| DPD CZ | Planned | — |
+| PPL CZ | Planned | — |
+| GLS CZ, Geis, DHL, InPost | Planned | — |
+
+The architecture is multi-carrier from day one: one config entry is one
+mailbox, and carriers are independent provider modules. Adding a carrier means
+adding one module, one fixture, one docs row and EN/CS strings — no changes to
+entities, coordinator or storage.
+
+### Installation
+
+1. In HACS, add this repository as a **custom repository** of type
+   *Integration*, then install **ParcelTracker**.
+2. Restart Home Assistant.
+3. Go to *Settings → Devices & Services → Add Integration → ParcelTracker*.
+4. Enter the Gmail address and a **Google app password**:
+   - enable 2-step verification on the Google account,
+   - generate an app password at <https://myaccount.google.com/apppasswords>,
+   - make sure IMAP is enabled in Gmail settings,
+   - use the app password (16 characters), not your normal Google password.
+5. Optionally set the IMAP host/port, mailbox (label), poll interval, sender
+   allowlist and an extra tracking regex. For Balíkovna notices, `balikovna.cz`
+   is a useful allowlist entry.
+
+The `exampleMails/` directory contains real forwarded messages used by the
+parser tests. Redact personal data in them before publishing the repository.
+
+Credentials are stored in Home Assistant's config entry (`.storage`) and are
+never written to entity attributes, logs or diagnostics.
+
+### Entities and events
+
+For each parcel (one device per `carrier:barcode`):
+
+- `sensor.status` — canonical status: `registered`, `in_transit`,
+  `out_for_delivery`, `at_pickup_point`, `delivered`, `returning`, `problem`,
+  `unknown`;
+- `sensor.last_event` — last human-readable carrier event;
+- `sensor.pickup_code` — the `Číslo balíku` value, when present;
+- `binary_sensor.delivered`;
+- `button.refresh` — manual refresh for the mailbox.
+
+Status is derived from the **highest rank reached**, not the last event, so
+late designation records cannot turn a delivered parcel back into
+`at_pickup_point`.
+
+Events fired on the HA event bus:
+`parceltracker_parcel_registered`, `parceltracker_parcel_status_changed`,
+`parceltracker_parcel_delivered`.
+
+Polling is dynamic: 15 min when something is out for delivery, 30 min in
+transit, 60 min when idle or at night (00:00–06:00). Email is always polled.
+
+### Privacy and limitations
+
+- Raw email subject and body are never stored in attributes. Only the two
+  numbers, carrier data and timestamps are kept.
+- The carrier endpoints are public but unofficial and may change. A failed
+  request keeps the cached state and sets `unknown` rather than breaking the
+  integration.
+- These endpoints are intended for senders/recipients checking their own
+  parcels. Do not redistribute the data.
+- Nothing here sends mail or modifies messages other than optionally marking
+  processed messages as read.
+
+### Development
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Tests use stdlib stubs and run without Home Assistant installed.
+
+---
+
+## Česky
+
+ParcelTracker je **vlastní integrace Home Assistantu pro HACS**. Čte přeposlané
+e-maily od dopravců z vyhrazené Gmail schránky, vytěží čísla zásilek, dotáže se
+dopravce a zobrazí balíky jako entity v Home Assistantu. Není potřeba žádný
+samostatný server, Docker ani doplněk.
+
+### Jak to funguje
+
+1. Do „burner“ Gmail schránky chodí přeposlaná oznámení o doručení.
+2. Integrace schránku načte přes IMAP (bez externích závislostí) a vytěží:
+   - `Číslo zásilky` → číslo zásilky (kanonické `barcode`),
+   - `Číslo balíku` → číslo balíku k vyzvednutí (atribut a senzor).
+   Pokud tělo číslo neobsahuje, dočasně se použije dekódovaný předmět a odkazy
+   na sledování. Nic z e-mailu se neuchovává doslovně.
+3. Provider se dotáže dopravce. První provider používá **veřejné JSON endpointy
+   bez klíče** České pošty / Balíkovny — bez API klíče a bez parsování HTML.
+4. Balíky se ukládají přes `Store` a vystavují v kanonickém formátu rodiny
+   `ha-parcel-integrations`, takže je umí zpracovat `ha-parcel-aggregator`.
+   **Neinstalujte vedle této integrace `ha-ceska-posta`**, jinak se balíky
+   zduplikují.
+
+### Podporovaní dopravci
+
+| Dopravce | Stav | ID provideru |
+|---|---|---|
+| Česká pošta / Balíkovna | Implementováno | `ceska_posta` |
+| Zásilkovna / Simpla | Plánováno | — |
+| DPD CZ | Plánováno | — |
+| PPL CZ | Plánováno | — |
+| GLS CZ, Geis, DHL, InPost | Plánováno | — |
+
+Architektura je od začátku multi-carrier: jedna konfigurační položka = jedna
+schránka, dopravci jsou samostatné moduly. Přidání dopravce znamená nový modul,
+fixture, řádek v tabulce a překlady EN/CS — entity, koordinátor ani úložiště se
+nemění.
+
+### Instalace
+
+1. V HACS přidejte tento repozitář jako **vlastní repozitář** typu
+   *Integrace* a nainstalujte **ParcelTracker**.
+2. Restartujte Home Assistant.
+3. Přejděte do *Nastavení → Zařízení a služby → Přidat integraci → ParcelTracker*.
+4. Zadejte Gmail adresu a **heslo pro aplikaci**:
+   - zapněte dvoufázové ověření Google účtu,
+   - vytvořte heslo pro aplikaci na <https://myaccount.google.com/apppasswords>,
+   - v nastavení Gmailu zapněte IMAP,
+   - použijte 16znakové heslo pro aplikaci, ne běžné heslo k účtu.
+5. Volitelně nastavte IMAP server/port, schránku (štítek), interval, seznam
+   povolených odesílatelů a doplňkový regex pro číslo zásilky. Pro oznámení z
+   Balíkovny se hodí jako povolený odesílatel `balikovna.cz`.
+
+Adresář `exampleMails/` obsahuje reálné přeposlané zprávy použité v testech
+parseru. Před zveřejněním repozitáře v nich anonymizujte osobní údaje.
+
+Přihlašovací údaje jsou uložené v konfigurační položce Home Assistantu
+(`.storage`) a nikdy se nedostanou do atributů entit, logů ani diagnostiky.
+
+### Entity a události
+
+Pro každý balík (jedno zařízení na `carrier:barcode`):
+
+- `sensor.status` — kanonický stav: `registered`, `in_transit`,
+  `out_for_delivery`, `at_pickup_point`, `delivered`, `returning`, `problem`,
+  `unknown`;
+- `sensor.last_event` — poslední událost v lidském jazyce;
+- `sensor.pickup_code` — hodnota `Číslo balíku`, pokud je dostupná;
+- `binary_sensor.delivered`;
+- `button.refresh` — ruční obnovení schránky.
+
+Stav se odvozuje z **nejvyšší dosažené úrovně**, ne z poslední události, aby
+pozdější evidenční záznamy nevrátily doručený balík zpět na `at_pickup_point`.
+
+Události na sběrnici HA:
+`parceltracker_parcel_registered`, `parceltracker_parcel_status_changed`,
+`parceltracker_parcel_delivered`.
+
+Dotazování je dynamické: 15 min při doručování, 30 min v přepravě, 60 min při
+nečinnosti a v noci (00:00–06:00). E-mail se vždy kontroluje.
+
+### Soukromí a omezení
+
+- Předmět a tělo e-mailu se do atributů nikdy neukládají. Uchováváme jen obě
+  čísla, data z dopravce a časové značky.
+- Endpointy dopravce jsou veřejné, ale neoficiální a mohou se změnit. Při
+  selhání se zachová poslední známý stav a integrace nespadne.
+- Endpointy jsou určeny pro odesílatele/adresáty kontrolující vlastní balíky.
+  Data dál nešířte.
+- Integrace neodesílá e-maily a s zprávami nemanipuluje, kromě volitelného
+  označení zpracovaných zpráv jako přečtené.
+
+### Vývoj
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Testy používají standardní knihovnu a fungují i bez nainstalovaného Home
+Assistantu.

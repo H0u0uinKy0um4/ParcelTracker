@@ -1,0 +1,80 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect a burner mailbox",
+        "description": "Messages forwarded from carriers are read from this Gmail mailbox via IMAP. Use a Google app password, not your normal password.",
+        "data": {
+          "email": "Gmail address",
+          "app_password": "App password",
+          "imap_host": "IMAP host",
+          "imap_port": "IMAP port",
+          "mailbox": "Mailbox / label",
+          "scan_interval": "Poll interval (minutes)",
+          "sender_allowlist": "Allowed senders (comma separated, optional)",
+          "extra_tracking_regex": "Extra tracking regex (one per line, optional)",
+          "mark_seen": "Mark processed messages as read",
+          "include_history": "Store event history in attributes"
+        }
+      }
+    },
+    "error": {
+      "invalid_email": "Enter a valid email address.",
+      "invalid_auth": "Gmail rejected the address or app password. Enable 2-step verification and create an app password.",
+      "cannot_connect": "Could not connect to the IMAP server. Check the host, port and that IMAP is enabled in Gmail."
+    },
+    "abort": {
+      "already_configured": "This mailbox is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ParcelTracker options",
+        "description": "Choose what to change.",
+        "menu_options": {
+          "general": "Polling and parsing",
+          "credentials": "Gmail credentials"
+        }
+      },
+      "general": {
+        "title": "Polling and parsing",
+        "data": {
+          "imap_host": "IMAP host",
+          "imap_port": "IMAP port",
+          "mailbox": "Mailbox / label",
+          "scan_interval": "Poll interval (minutes)",
+          "sender_allowlist": "Allowed senders (comma separated, optional)",
+          "extra_tracking_regex": "Extra tracking regex (one per line, optional)",
+          "mark_seen": "Mark processed messages as read",
+          "include_history": "Store event history in attributes"
+        }
+      },
+      "credentials": {
+        "title": "Gmail credentials",
+        "data": {
+          "email": "Gmail address",
+          "app_password": "App password"
+        }
+      }
+    },
+    "error": {
+      "invalid_email": "Enter a valid email address.",
+      "invalid_auth": "Gmail rejected the address or app password.",
+      "cannot_connect": "Could not connect to the IMAP server."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": { "name": "Status" },
+      "last_event": { "name": "Last event" },
+      "pickup_code": { "name": "Pickup code" }
+    },
+    "binary_sensor": {
+      "delivered": { "name": "Delivered" }
+    },
+    "button": {
+      "refresh": { "name": "Refresh parcels" }
+    }
+  }
+}

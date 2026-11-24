@@ -1,0 +1,15 @@
+{
+  "entity": {
+    "sensor": {
+      "status": { "default": "mdi:truck-delivery" },
+      "last_event": { "default": "mdi:clipboard-text-outline" },
+      "pickup_code": { "default": "mdi:ticket-outline" }
+    },
+    "binary_sensor": {
+      "delivered": { "default": "mdi:package-check" }
+    },
+    "button": {
+      "refresh": { "default": "mdi:refresh" }
+    }
+  }
+}
