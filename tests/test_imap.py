@@ -9,7 +9,7 @@ import imaplib
 import unittest
 
 from custom_components.parceltracker.imap_client import (
-    GmailImapClient,
+    ImapClient,
     MailboxError,
     parse_allowlist,
 )
@@ -67,9 +67,10 @@ class ImapClientTests(unittest.TestCase):
             2: _message("Newsletter", "spam@example.org"),
         }
         self.connection = FakeImap(self.messages)
-        self.client = GmailImapClient(
-            "burner@gmail.com",
+        self.client = ImapClient(
+            "burner@example.com",
             "app-password",
+            "imap.example.com",
             connection_factory=lambda *_: self.connection,
         )
 
@@ -104,14 +105,30 @@ class ImapClientTests(unittest.TestCase):
     def test_validate_login(self) -> None:
         self.assertTrue(self.client.validate_login())
         failing = FakeImap(self.messages, fail_login=True)
-        client = GmailImapClient(
-            "burner@gmail.com",
+        client = ImapClient(
+            "burner@example.com",
             "bad-password",
+            "imap.example.com",
             connection_factory=lambda *_: failing,
         )
         with self.assertRaises(MailboxError) as err:
             client.validate_login()
         self.assertIn("AUTHENTICATIONFAILED", str(err.exception))
+
+    def test_uses_configured_host_and_port(self) -> None:
+        """Any IMAP provider works; no host is hard-coded to Gmail."""
+        calls: list[tuple[str, int]] = []
+
+        def factory(host: str, port: int) -> FakeImap:
+            calls.append((host, port))
+            return self.connection
+
+        client = ImapClient(
+            "user@proton.example", "secret", "imap.example.org", 1143,
+            connection_factory=factory,
+        )
+        self.assertTrue(client.validate_login())
+        self.assertEqual(calls, [("imap.example.org", 1143)])
 
     def test_allowlist_helper(self) -> None:
         self.assertEqual(parse_allowlist("a@example.com, b@example.com"), ("a@example.com", "b@example.com"))

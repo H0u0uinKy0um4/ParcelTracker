@@ -42,7 +42,7 @@ from .const import (
     STORAGE_VERSION,
     DOMAIN,
 )
-from .imap_client import GmailImapClient, MailboxError, parse_allowlist
+from .imap_client import ImapClient, MailboxError, parse_allowlist
 from .models import ParcelStatus
 from .parcels import new_local_parcel, normalize_parcel
 from .providers import provider_instance
@@ -56,7 +56,7 @@ class TrackingFetchError(Exception):
 
 
 class ParcelCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
-    """Owns the persisted parcels for one burner mailbox."""
+    """Owns the persisted parcels for one mailbox."""
 
     config_entry: ConfigEntry
 
@@ -112,7 +112,7 @@ class ParcelCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """Read new forwarded messages and add newly discovered parcels."""
         entry = self.config_entry
         options = entry.options
-        client = GmailImapClient(
+        client = ImapClient(
             str(entry.data.get(CONF_EMAIL, "")),
             str(entry.data.get(CONF_APP_PASSWORD, "")),
             str(options.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST)),

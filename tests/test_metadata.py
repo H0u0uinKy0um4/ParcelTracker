@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import unittest
 
-from custom_components.parceltracker.const import DOMAIN, PLATFORMS
+from custom_components.parceltracker.const import DEFAULT_IMAP_HOST, DOMAIN, PLATFORMS
 from custom_components.parceltracker.parsers import (
     decode_email_body,
     decode_header_value,
@@ -47,6 +47,11 @@ class MetadataTests(unittest.TestCase):
 
     def test_platforms_are_carrier_agnostic(self) -> None:
         self.assertEqual(set(PLATFORMS), {"sensor", "binary_sensor", "button"})
+
+    def test_no_provider_specific_imap_default(self) -> None:
+        self.assertEqual(DEFAULT_IMAP_HOST, "")
+        for path in COMPONENT.rglob("*.py"):
+            self.assertNotIn("gmail.com", path.read_text(encoding="utf-8").lower())
 
     def test_readme_is_bilingual(self) -> None:
         readme = (COMPONENT.parents[1] / "README.md").read_text(encoding="utf-8")

@@ -2,11 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect a burner mailbox",
-        "description": "Messages forwarded from carriers are read from this Gmail mailbox via IMAP. Use a Google app password, not your normal password.",
+        "title": "Connect a mailbox",
+        "description": "Messages forwarded from carriers are read from this mailbox via IMAP. Works with Gmail, Proton, Outlook, Seznam or any other IMAP provider. Use your provider's password or app password.",
         "data": {
-          "email": "Gmail address",
-          "app_password": "App password",
+          "email": "Email address",
+          "app_password": "Password / app password",
           "imap_host": "IMAP host",
           "imap_port": "IMAP port",
           "mailbox": "Mailbox / label",
@@ -20,8 +20,9 @@
     },
     "error": {
       "invalid_email": "Enter a valid email address.",
-      "invalid_auth": "Gmail rejected the address or app password. Enable 2-step verification and create an app password.",
-      "cannot_connect": "Could not connect to the IMAP server. Check the host, port and that IMAP is enabled in Gmail."
+      "invalid_host": "Enter the IMAP host of your mail provider (e.g. imap.gmail.com, imap-mail.outlook.com).",
+      "invalid_auth": "The mail server rejected the address or password. Check the credentials and any app-password requirement.",
+      "cannot_connect": "Could not connect to the IMAP server. Check the host, port and that IMAP is enabled."
     },
     "abort": {
       "already_configured": "This mailbox is already configured."
@@ -34,7 +35,7 @@
         "description": "Choose what to change.",
         "menu_options": {
           "general": "Polling and parsing",
-          "credentials": "Gmail credentials"
+          "credentials": "Mailbox credentials"
         }
       },
       "general": {
@@ -51,16 +52,17 @@
         }
       },
       "credentials": {
-        "title": "Gmail credentials",
+        "title": "Mailbox credentials",
         "data": {
-          "email": "Gmail address",
-          "app_password": "App password"
+          "email": "Email address",
+          "app_password": "Password / app password"
         }
       }
     },
     "error": {
       "invalid_email": "Enter a valid email address.",
-      "invalid_auth": "Gmail rejected the address or app password.",
+      "invalid_host": "Enter the IMAP host of your mail provider.",
+      "invalid_auth": "The mail server rejected the address or password.",
       "cannot_connect": "Could not connect to the IMAP server."
     }
   },

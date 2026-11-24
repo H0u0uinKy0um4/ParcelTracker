@@ -1,8 +1,9 @@
 """Config and options flow for ParcelTracker.
 
-The Gmail address and app password live in the config entry data (HA's
-``.storage``); all non-secret settings live in options. Credentials are never
-written to attributes, logs or diagnostics.
+The email address and password/app password live in the config entry data
+(HA's ``.storage``); all non-secret settings live in options. Credentials are
+never written to attributes, logs or diagnostics. Any IMAP provider is
+supported via the configurable host and port.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ from .const import (
     DOMAIN,
     MIN_SCAN_INTERVAL,
 )
-from .imap_client import GmailImapClient, MailboxError
+from .imap_client import ImapClient, MailboxError
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -106,13 +107,16 @@ class ParcelTrackerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             email_address = str(user_input[CONF_EMAIL]).strip().casefold()
+            host = str(user_input.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST)).strip()
             if not _EMAIL_RE.fullmatch(email_address):
                 errors[CONF_EMAIL] = "invalid_email"
+            elif not host:
+                errors[CONF_IMAP_HOST] = "invalid_host"
             else:
-                client = GmailImapClient(
+                client = ImapClient(
                     email_address,
                     user_input[CONF_APP_PASSWORD],
-                    user_input.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST),
+                    host,
                     int(user_input.get(CONF_IMAP_PORT, DEFAULT_IMAP_PORT)),
                     user_input.get(CONF_MAILBOX, DEFAULT_MAILBOX),
                 )
@@ -138,6 +142,7 @@ class ParcelTrackerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         for key, value in user_input.items()
                         if key not in (CONF_EMAIL, CONF_APP_PASSWORD)
                     }
+                    options[CONF_IMAP_HOST] = host
                     return self.async_create_entry(
                         title=email_address, data=data, options=options
                     )
@@ -180,6 +185,14 @@ class ParcelTrackerOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Update non-secret settings."""
         if user_input is not None:
+            host = str(user_input.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST)).strip()
+            if not host:
+                return self.async_show_form(
+                    step_id="general",
+                    data_schema=_general_schema(user_input),
+                    errors={CONF_IMAP_HOST: "invalid_host"},
+                )
+            user_input[CONF_IMAP_HOST] = host
             return self.async_create_entry(title="", data=user_input)
         return self.async_show_form(
             step_id="general", data_schema=_general_schema(dict(self._entry.options))
@@ -188,17 +201,17 @@ class ParcelTrackerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_credentials(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Update the Gmail app password without re-creating the entry."""
+        """Update the mailbox credentials without re-creating the entry."""
         errors: dict[str, str] = {}
         if user_input is not None:
             email_address = str(user_input[CONF_EMAIL]).strip().casefold()
             if not _EMAIL_RE.fullmatch(email_address):
                 errors[CONF_EMAIL] = "invalid_email"
             else:
-                client = GmailImapClient(
+                client = ImapClient(
                     email_address,
                     user_input[CONF_APP_PASSWORD],
-                    self._entry.options.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST),
+                    str(self._entry.options.get(CONF_IMAP_HOST, DEFAULT_IMAP_HOST)).strip(),
                     int(
                         self._entry.options.get(
                             CONF_IMAP_PORT, DEFAULT_IMAP_PORT

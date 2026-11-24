@@ -2,11 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Připojit burner schránku",
-        "description": "Zprávy přeposlané od dopravců se čtou z této Gmail schránky přes IMAP. Použijte heslo pro aplikaci, ne své běžné heslo.",
+        "title": "Připojit schránku",
+        "description": "Zprávy přeposlané od dopravců se čtou z této schránky přes IMAP. Funguje s Gmail, Proton, Outlook, Seznam i jinými IMAP poskytovateli. Použijte heslo nebo heslo pro aplikaci podle svého poskytovatele.",
         "data": {
-          "email": "Gmail adresa",
-          "app_password": "Heslo pro aplikaci",
+          "email": "E-mailová adresa",
+          "app_password": "Heslo / heslo pro aplikaci",
           "imap_host": "IMAP server",
           "imap_port": "IMAP port",
           "mailbox": "Schránka / štítek",
@@ -20,8 +20,9 @@
     },
     "error": {
       "invalid_email": "Zadejte platnou e-mailovou adresu.",
-      "invalid_auth": "Gmail odmítl adresu nebo heslo pro aplikaci. Zapněte dvoufázové ověření a vytvořte heslo pro aplikaci.",
-      "cannot_connect": "Nelze se připojit k IMAP serveru. Zkontrolujte server, port a zda je v Gmailu zapnutý IMAP."
+      "invalid_host": "Zadejte IMAP server svého poskytovatele (např. imap.gmail.com, imap-mail.outlook.com).",
+      "invalid_auth": "Mailový server odmítl adresu nebo heslo. Zkontrolujte přihlašovací údaje a případné heslo pro aplikaci.",
+      "cannot_connect": "Nelze se připojit k IMAP serveru. Zkontrolujte server, port a zda je IMAP zapnutý."
     },
     "abort": {
       "already_configured": "Tato schránka už je nakonfigurovaná."
@@ -34,7 +35,7 @@
         "description": "Vyberte, co chcete změnit.",
         "menu_options": {
           "general": "Dotazování a parsování",
-          "credentials": "Gmail přihlašovací údaje"
+          "credentials": "Přihlašovací údaje schránky"
         }
       },
       "general": {
@@ -51,16 +52,17 @@
         }
       },
       "credentials": {
-        "title": "Gmail přihlašovací údaje",
+        "title": "Přihlašovací údaje schránky",
         "data": {
-          "email": "Gmail adresa",
-          "app_password": "Heslo pro aplikaci"
+          "email": "E-mailová adresa",
+          "app_password": "Heslo / heslo pro aplikaci"
         }
       }
     },
     "error": {
       "invalid_email": "Zadejte platnou e-mailovou adresu.",
-      "invalid_auth": "Gmail odmítl adresu nebo heslo pro aplikaci.",
+      "invalid_host": "Zadejte IMAP server svého poskytovatele.",
+      "invalid_auth": "Mailový server odmítl adresu nebo heslo.",
       "cannot_connect": "Nelze se připojit k IMAP serveru."
     }
   },

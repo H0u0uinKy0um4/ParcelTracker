@@ -5,13 +5,14 @@
 ## English
 
 ParcelTracker is a **HACS custom integration for Home Assistant**. It reads
-forwarded carrier emails from a dedicated Gmail inbox, extracts tracking
-numbers, queries the carrier and exposes each parcel as Home Assistant
-entities. No separate service, container or add-on is required.
+forwarded carrier emails from a dedicated IMAP mailbox (Gmail, Proton, Outlook,
+Seznam, or any other provider), extracts tracking numbers, queries the carrier
+and exposes each parcel as Home Assistant entities. No separate service,
+container or add-on is required.
 
 ### How it works
 
-1. A burner Gmail account receives forwarded delivery notices.
+1. A dedicated mailbox (any IMAP provider) receives forwarded delivery notices.
 2. The integration reads the mailbox over IMAP (standard library, no extra
    requirements) and extracts:
    - `Číslo zásilky` → tracking number (canonical `barcode`),
@@ -49,14 +50,12 @@ entities, coordinator or storage.
    *Integration*, then install **ParcelTracker**.
 2. Restart Home Assistant.
 3. Go to *Settings → Devices & Services → Add Integration → ParcelTracker*.
-4. Enter the Gmail address and a **Google app password**:
-   - enable 2-step verification on the Google account,
-   - generate an app password at <https://myaccount.google.com/apppasswords>,
-   - make sure IMAP is enabled in Gmail settings,
-   - use the app password (16 characters), not your normal Google password.
-5. Optionally set the IMAP host/port, mailbox (label), poll interval, sender
-   allowlist and an extra tracking regex. For Balíkovna notices, `balikovna.cz`
-   is a useful allowlist entry.
+4. Enter the email address and the password or app password required by your
+   provider (e.g. a Google or Microsoft app password, or the Proton Mail Bridge
+   password). Enable IMAP in the provider's settings.
+5. Enter the provider's IMAP host and port (usually 993 with TLS), plus the
+   mailbox (label), poll interval, sender allowlist and an extra tracking regex.
+   For Balíkovna notices, `balikovna.cz` is a useful allowlist entry.
 
 The `exampleMails/` directory contains real forwarded messages used by the
 parser tests. Redact personal data in them before publishing the repository.
@@ -112,13 +111,15 @@ Tests use stdlib stubs and run without Home Assistant installed.
 ## Česky
 
 ParcelTracker je **vlastní integrace Home Assistantu pro HACS**. Čte přeposlané
-e-maily od dopravců z vyhrazené Gmail schránky, vytěží čísla zásilek, dotáže se
-dopravce a zobrazí balíky jako entity v Home Assistantu. Není potřeba žádný
-samostatný server, Docker ani doplněk.
+e-maily od dopravců z vyhrazené IMAP schránky (Gmail, Proton, Outlook, Seznam
+nebo jiný poskytovatel), vytěží čísla zásilek, dotáže se dopravce a zobrazí
+balíky jako entity v Home Assistantu. Není potřeba žádný samostatný server,
+Docker ani doplněk.
 
 ### Jak to funguje
 
-1. Do „burner“ Gmail schránky chodí přeposlaná oznámení o doručení.
+1. Do vyhrazené schránky (libovolný IMAP poskytovatel) chodí přeposlaná
+   oznámení o doručení.
 2. Integrace schránku načte přes IMAP (bez externích závislostí) a vytěží:
    - `Číslo zásilky` → číslo zásilky (kanonické `barcode`),
    - `Číslo balíku` → číslo balíku k vyzvednutí (atribut a senzor).
@@ -152,14 +153,13 @@ nemění.
    *Integrace* a nainstalujte **ParcelTracker**.
 2. Restartujte Home Assistant.
 3. Přejděte do *Nastavení → Zařízení a služby → Přidat integraci → ParcelTracker*.
-4. Zadejte Gmail adresu a **heslo pro aplikaci**:
-   - zapněte dvoufázové ověření Google účtu,
-   - vytvořte heslo pro aplikaci na <https://myaccount.google.com/apppasswords>,
-   - v nastavení Gmailu zapněte IMAP,
-   - použijte 16znakové heslo pro aplikaci, ne běžné heslo k účtu.
-5. Volitelně nastavte IMAP server/port, schránku (štítek), interval, seznam
-   povolených odesílatelů a doplňkový regex pro číslo zásilky. Pro oznámení z
-   Balíkovny se hodí jako povolený odesílatel `balikovna.cz`.
+4. Zadejte e-mailovou adresu a heslo nebo heslo pro aplikaci podle svého
+   poskytovatele (např. Google, Microsoft, Proton Mail Bridge). V nastavení
+   poskytovatele zapněte IMAP.
+5. Zadejte IMAP server a port poskytovatele (obvykle 993 s TLS), schránku
+   (štítek), interval, seznam povolených odesílatelů a doplňkový regex pro
+   číslo zásilky. Pro oznámení z Balíkovny se hodí jako povolený odesílatel
+   `balikovna.cz`.
 
 Adresář `exampleMails/` obsahuje reálné přeposlané zprávy použité v testech
 parseru. Před zveřejněním repozitáře v nich anonymizujte osobní údaje.

@@ -1,4 +1,4 @@
-"""Gmail IMAP reader built on the standard library.
+"""Generic IMAP reader built on the standard library.
 
 Runs synchronously; the HA coordinator calls it through
 ``hass.async_add_executor_job``. It returns only parsed numbers and UIDs —
@@ -55,20 +55,20 @@ def sender_allowed(message: Message, allowlist: tuple[str, ...] | list[str]) -> 
     return any(entry and entry.strip().casefold() in sender for entry in allowlist)
 
 
-class GmailImapClient:
-    """Minimal IMAP client for a Gmail burner inbox with an app password."""
+class ImapClient:
+    """Minimal IMAP client for any provider (Gmail, Proton, Outlook, ...)."""
 
     def __init__(
         self,
         email_address: str,
-        app_password: str,
-        host: str = "imap.gmail.com",
+        password: str,
+        host: str,
         port: int = 993,
         mailbox: str = "INBOX",
         connection_factory: ConnectionFactory | None = None,
     ) -> None:
         self.email_address = email_address
-        self.app_password = app_password
+        self.password = password
         self.host = host
         self.port = int(port)
         self.mailbox = mailbox
@@ -78,7 +78,7 @@ class GmailImapClient:
         """Open an authenticated, selected mailbox connection."""
         try:
             client = self._factory(self.host, self.port)
-            client.login(self.email_address, self.app_password)
+            client.login(self.email_address, self.password)
             client.select(self.mailbox, readonly=readonly)
         except Exception as err:  # noqa: BLE001 - IMAP errors are client-specific
             raise MailboxError(f"IMAP login/select failed: {err}") from None
@@ -104,7 +104,7 @@ class GmailImapClient:
         """Fetch, parse and optionally mark new messages since ``last_uid``.
 
         ``limit`` applies only on the first poll (when no UID cursor exists),
-        so a burner mailbox with years of mail is not scanned from the start.
+        so a mailbox with years of mail is not scanned from the start.
         """
         client = self._connect(readonly=not mark_seen)
         result = FetchResult(last_uid=int(last_uid or 0))

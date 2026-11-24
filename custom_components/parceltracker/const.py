@@ -20,7 +20,9 @@ CONF_EXTRA_TRACKING_REGEX = "extra_tracking_regex"
 CONF_MARK_SEEN = "mark_seen"
 CONF_INCLUDE_HISTORY = "include_history"
 
-DEFAULT_IMAP_HOST = "imap.gmail.com"
+# No provider-specific default: the mailbox may be Gmail, Proton, Outlook,
+# Seznam or any other IMAP server. The host is entered in the config flow.
+DEFAULT_IMAP_HOST = ""
 DEFAULT_IMAP_PORT = 993
 DEFAULT_MAILBOX = "INBOX"
 DEFAULT_SCAN_INTERVAL = 15
