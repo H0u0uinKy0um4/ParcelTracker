@@ -90,14 +90,19 @@ class ParcelCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.last_scan_matched: int = 0
         self.last_error: str | None = None
 
-    async def _fetch_json(self, url: str, *, method: str = "GET") -> Any:
+    async def _fetch_json(
+        self, url: str, *, method: str = "GET", headers: dict[str, str] | None = None
+    ) -> Any:
         """Fetch a keyless carrier endpoint and decode JSON regardless of MIME.
 
-        ``method`` is generic (not carrier-specific): most endpoints use GET,
-        while Packeta's public web endpoint only accepts POST.
+        ``method``/``headers`` are generic optional knobs: most endpoints use GET
+        with default headers, while some keyless endpoints need POST or a specific
+        Accept header.
         """
         try:
-            async with self._session.request(method.upper(), url) as response:
+            async with self._session.request(
+                method.upper(), url, headers=headers
+            ) as response:
                 if response.status != 200:
                     raise TrackingFetchError(f"HTTP {response.status}")
                 return await response.json(content_type=None)

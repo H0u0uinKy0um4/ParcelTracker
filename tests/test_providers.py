@@ -237,15 +237,17 @@ ALLEGRO_PAYLOAD: dict[str, Any] = {
 
 
 def fake_multi_fetch(
-    calls: list[tuple[str, str]],
+    calls: list[tuple[str, str, dict[str, str] | None]],
     payloads: dict[str, Any],
     *,
     fail: bool = False,
 ):
-    """Record method + URL and return a payload keyed by tracking code."""
+    """Record method + URL + headers and return a payload keyed by tracking code."""
 
-    async def fetch(url: str, *, method: str = "GET") -> Any:
-        calls.append((method, url))
+    async def fetch(
+        url: str, *, method: str = "GET", headers: dict[str, str] | None = None, **_: Any
+    ) -> Any:
+        calls.append((method, url, headers))
         if fail:
             raise OSError("network down")
         if "getPacketById" in url:
@@ -259,7 +261,7 @@ def fake_multi_fetch(
 
 class NewCarrierTests(unittest.TestCase):
     def test_packeta_uses_post_and_maps_events(self) -> None:
-        calls: list[tuple[str, str]] = []
+        calls: list[tuple[str, str, dict[str, str] | None]] = []
         parcel = asyncio.run(
             PacketaProvider().async_track(
                 [PACKETA_CODE],
@@ -290,7 +292,7 @@ class NewCarrierTests(unittest.TestCase):
         self.assertEqual(len(canonical["history"]), 3)
 
     def test_packeta_missing_item_is_not_found(self) -> None:
-        calls: list[tuple[str, str]] = []
+        calls: list[tuple[str, str, dict[str, str] | None]] = []
         parcel = asyncio.run(
             PacketaProvider().async_track(
                 ["Z0000000000"], fake_multi_fetch(calls, {})
@@ -301,7 +303,7 @@ class NewCarrierTests(unittest.TestCase):
         self.assertEqual(normalize_parcel(parcel)["status"], "unknown")
 
     def test_allegro_sorts_events_and_maps_status(self) -> None:
-        calls: list[tuple[str, str]] = []
+        calls: list[tuple[str, str, dict[str, str] | None]] = []
         parcel = asyncio.run(
             AllegroProvider().async_track(
                 [ALLEGRO_CODE],
@@ -310,6 +312,10 @@ class NewCarrierTests(unittest.TestCase):
         )[ALLEGRO_CODE]
         self.assertEqual(calls[0][0], "GET")
         self.assertIn("packageNo=A0069G83L2", calls[0][1])
+        self.assertEqual(
+            (calls[0][2] or {}).get("Accept"),
+            "application/vnd.allegro.internal.v1+json",
+        )
         self.assertEqual(
             [event["id"] for event in parcel.events], ["-L", "P2", "91"]
         )
@@ -321,7 +327,7 @@ class NewCarrierTests(unittest.TestCase):
         self.assertEqual(len(canonical["history"]), 3)
 
     def test_allegro_failure_is_reported_not_raised(self) -> None:
-        calls: list[tuple[str, str]] = []
+        calls: list[tuple[str, str, dict[str, str] | None]] = []
         parcels = asyncio.run(
             AllegroProvider().async_track(
                 [ALLEGRO_CODE],

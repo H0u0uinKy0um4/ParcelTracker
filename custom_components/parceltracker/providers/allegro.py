@@ -25,6 +25,7 @@ CARRIER_NAME = "Allegro One"
 
 TRACKING_URL = "https://edge.allegro.pl/ad/tracking?packageNo={code}"
 _CODE_RE = re.compile(r"^A\d[A-Z0-9]{8,11}$")
+_HEADERS = {"Accept": "application/vnd.allegro.internal.v1+json"}
 
 # Map the carrier's event descriptions to the canonical event ids used by
 # :mod:`parceltracker.parcels`. Multilingual patterns cover the languages the
@@ -132,7 +133,7 @@ class AllegroProvider:
 
     async def _async_one(self, code: str, fetch_json: JsonFetcher) -> ProviderParcel:
         """Fetch and normalise one waybill."""
-        payload = await fetch_json(self.tracking_url(code) or "")
+        payload = await fetch_json(self.tracking_url(code) or "", headers=_HEADERS)
         raw = payload if isinstance(payload, dict) else {}
         error: str | None = None
         if not isinstance(payload, dict):
