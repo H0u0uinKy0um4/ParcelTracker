@@ -14,7 +14,8 @@
           "sender_allowlist": "Allowed senders (comma separated, optional)",
           "extra_tracking_regex": "Extra tracking regex (one per line, optional)",
           "mark_seen": "Mark processed messages as read",
-          "include_history": "Store event history in attributes"
+          "include_history": "Store event history in attributes",
+          "cleanup_days": "Remove delivered parcels after days (0 = never)"
         }
       }
     },
@@ -48,7 +49,8 @@
           "sender_allowlist": "Allowed senders (comma separated, optional)",
           "extra_tracking_regex": "Extra tracking regex (one per line, optional)",
           "mark_seen": "Mark processed messages as read",
-          "include_history": "Store event history in attributes"
+          "include_history": "Store event history in attributes",
+          "cleanup_days": "Remove delivered parcels after days (0 = never)"
         }
       },
       "credentials": {
@@ -76,7 +78,32 @@
       "delivered": { "name": "Delivered" }
     },
     "button": {
-      "refresh": { "name": "Refresh parcels" }
+      "refresh": { "name": "Refresh parcels" },
+      "remove": { "name": "Remove parcel" }
+    }
+  },
+  "services": {
+    "remove_parcel": {
+      "name": "Remove parcel",
+      "description": "Remove one parcel from storage and delete its entities.",
+      "fields": {
+        "carrier": {
+          "name": "Carrier",
+          "description": "Carrier ID stored with the parcel, e.g. ceska_posta."
+        },
+        "barcode": {
+          "name": "Tracking number",
+          "description": "Canonical tracking number of the parcel."
+        }
+      }
+    },
+    "scan_now": {
+      "name": "Scan now",
+      "description": "Trigger an immediate mailbox and carrier refresh for all configured ParcelTracker entries."
+    },
+    "clear_delivered": {
+      "name": "Clear delivered parcels",
+      "description": "Remove all delivered parcels from storage and delete their entities for all configured ParcelTracker entries."
     }
   }
 }

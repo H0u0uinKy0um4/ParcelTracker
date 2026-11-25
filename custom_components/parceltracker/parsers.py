@@ -61,33 +61,10 @@ _LABELS: dict[str, tuple[re.Pattern[str], ...]] = {
     "pickup": _compile_labels(PICKUP_LABELS),
 }
 
-# A postal code: 1-2 letters, 9-11 digits and an optional 1-2 letter country
-# suffix (e.g. DR1234567890C, RR123456789CZ). Balíkovna also uses bare numeric
-# IDs, handled separately below.
-POSTAL_CODE_RE = re.compile(r"\b[A-Z]{1,2}\d{9,11}[A-Z]{0,2}\b")
-NUMERIC_CODE_RE = re.compile(r"\b\d{6,13}\b")
+# Generic shape heuristics used only for unlabelled prioritization. Carrier
+# code-shape recognition/normalization lives in the provider seam.
+_POSTAL_PRIORITY_RE = re.compile(r"^[A-Z]{1,2}\d{9,11}[A-Z]{0,2}$")
 LABEL_SPLIT_RE = re.compile(r"\s*[:#]\s*")
-
-# Other carriers write their numbers with spaces or mixed letters/digits.
-# Each pattern returns the compact, uppercase form stored as ``barcode``.
-# Postal codes are still scanned first, so ambiguous shapes stay with ČP.
-CARRIER_CODE_PATTERNS: tuple[tuple[re.Pattern[str], Callable[[str], str]], ...] = (
-    # Packeta / Zásilkovna: "Z 602 7037 619" -> "Z6027037619".
-    (
-        re.compile(r"\bZ\s*\d(?:\s*\d){9}\b", re.IGNORECASE),
-        lambda value: re.sub(r"\s+", "", value).upper(),
-    ),
-    # Allegro One internal waybill: "A0069G83L2".
-    (
-        re.compile(r"\bA\d[A-Z0-9]{8,11}\b", re.IGNORECASE),
-        lambda value: value.upper(),
-    ),
-)
-
-
-def _is_carrier_code(code: str) -> bool:
-    """Whether a code came from one of the non-postal carrier patterns."""
-    return any(pattern.fullmatch(code) for pattern, _ in CARRIER_CODE_PATTERNS)
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -193,43 +170,6 @@ def _valid_code(candidate: str) -> bool:
     )
 
 
-def _codes_in(
-    text: str,
-    extra_patterns: Iterable[re.Pattern[str]] = (),
-    *,
-    allow_numeric: bool = True,
-) -> list[str]:
-    """Extract candidate tracking codes, postal formats first.
-
-    ``allow_numeric=False`` is used for unlabelled scanning so a bare numeric
-    pickup code (``Číslo balíku: 12345678``) is not mistaken for a tracking
-    number. Explicit labels and user-provided regexes are still honoured.
-    """
-    upper = text.upper()
-    found: list[str] = []
-
-    def add_value(value: str) -> None:
-        value = value.strip().upper()
-        if _valid_code(value) and value not in found:
-            found.append(value)
-
-    def add(match: re.Match[str], group: int = 0) -> None:
-        add_value(match.group(group) or "")
-
-    for match in POSTAL_CODE_RE.finditer(upper):
-        add(match)
-    for pattern, compact in CARRIER_CODE_PATTERNS:
-        for match in pattern.finditer(upper):
-            add_value(compact(match.group(0)))
-    for pattern in extra_patterns:
-        for match in pattern.finditer(text):
-            add(match, 1 if match.groups() else 0)
-    if allow_numeric:
-        for match in NUMERIC_CODE_RE.finditer(upper):
-            add(match)
-    return found
-
-
 def _compile_extra(patterns: Iterable[str | re.Pattern[str]]) -> tuple[re.Pattern[str], ...]:
     compiled: list[re.Pattern[str]] = []
     for pattern in patterns or ():
@@ -241,6 +181,42 @@ def _compile_extra(patterns: Iterable[str | re.Pattern[str]]) -> tuple[re.Patter
             # An invalid user pattern must not break every other parcel.
             continue
     return tuple(compiled)
+
+
+def _recognized_codes(
+    text: str,
+    extra_patterns: Iterable[re.Pattern[str]] = (),
+    *,
+    allow_numeric: bool = True,
+) -> list[str]:
+    """Extract recognized tracking codes via the provider seam."""
+    from .providers import extract_codes_from_text
+
+    patterns = tuple(extra_patterns or ())
+    recognized = extract_codes_from_text(text, extra_patterns=patterns)
+    found: list[str] = []
+    for item in recognized:
+        code = (item.code or "").strip().upper()
+        if not allow_numeric and item.numeric:
+            continue
+        if _valid_code(code) and code not in found:
+            found.append(code)
+    return found
+
+
+def _codes_in(
+    text: str,
+    extra_patterns: Iterable[re.Pattern[str]] = (),
+    *,
+    allow_numeric: bool = True,
+) -> list[str]:
+    """Extract candidate tracking codes via provider recognition.
+
+    ``allow_numeric=False`` is used for unlabelled scanning so a bare numeric
+    pickup code (``Číslo balíku: 12345678``) is not mistaken for a tracking
+    number. Explicit labels and user-provided regexes are still honoured.
+    """
+    return _recognized_codes(text, extra_patterns, allow_numeric=allow_numeric)
 
 
 def _label_matches(line: str) -> list[tuple[str, re.Match[str]]]:
@@ -301,15 +277,31 @@ def find_tracking_numbers(
     *,
     allow_numeric: bool = True,
 ) -> list[str]:
-    """Return labelled tracking numbers, then unlabelled postal codes."""
+    """Return labelled tracking numbers, then unlabelled recognized codes."""
     normalized = normalize_text(text)
     patterns = _compile_extra(extra_patterns)
     labelled = _labelled_values(normalized, patterns)["tracking"]
     if labelled:
         return labelled
-    unlabelled = _codes_in(normalized, patterns, allow_numeric=allow_numeric)
-    postal = [code for code in unlabelled if POSTAL_CODE_RE.fullmatch(code)]
-    carrier_codes = [code for code in unlabelled if _is_carrier_code(code)]
+
+    from .providers import extract_codes_from_text
+
+    recognized = extract_codes_from_text(normalized, extra_patterns=patterns)
+    unlabelled: list[str] = []
+    postal: list[str] = []
+    carrier_codes: list[str] = []
+    for item in recognized:
+        code = (item.code or "").strip().upper()
+        if not allow_numeric and item.numeric:
+            continue
+        if not _valid_code(code) or code in unlabelled:
+            continue
+        unlabelled.append(code)
+        if _POSTAL_PRIORITY_RE.fullmatch(code):
+            postal.append(code)
+        if item.carrier and item.carrier != "unknown":
+            carrier_codes.append(code)
+
     return postal or carrier_codes or (unlabelled[:1] if allow_numeric else [])
 
 

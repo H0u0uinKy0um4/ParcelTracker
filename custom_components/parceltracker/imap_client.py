@@ -77,7 +77,7 @@ class ImapClient:
     def _connect(self, *, readonly: bool) -> Any:
         """Open an authenticated, selected mailbox connection."""
         try:
-            client = self._factory(self.host, self.port)
+            client = self._factory(self.host, self.port, timeout=30)
             client.login(self.email_address, self.password)
             client.select(self.mailbox, readonly=readonly)
         except Exception as err:  # noqa: BLE001 - IMAP errors are client-specific
@@ -105,6 +105,9 @@ class ImapClient:
 
         ``limit`` applies only on the first poll (when no UID cursor exists),
         so a mailbox with years of mail is not scanned from the start.
+
+        Messages are fetched with BODY.PEEK and a size cap so attachments are not
+        downloaded and unread state is not disturbed by the fetch itself.
         """
         client = self._connect(readonly=not mark_seen)
         result = FetchResult(last_uid=int(last_uid or 0))
@@ -126,7 +129,9 @@ class ImapClient:
                 uids = uids[-max(1, int(limit)) :]
 
             for uid in uids:
-                status, payload = client.uid("FETCH", str(uid).encode(), "(RFC822)")
+                status, payload = client.uid(
+                    "FETCH", str(uid).encode(), "(BODY.PEEK[]<0.300000>)"
+                )
                 if status != "OK":
                     _LOGGER.warning("IMAP FETCH failed for UID %s", uid)
                     continue
@@ -146,7 +151,9 @@ class ImapClient:
                     result.messages.append(FetchedMessage(uid=uid, parsed=parsed))
                     if mark_seen:
                         try:
-                            client.uid("STORE", str(uid).encode(), "+FLAGS", r"(\Seen)")
+                            client.uid(
+                                "STORE", str(uid).encode(), "+FLAGS", r"(\Seen)"
+                            )
                         except Exception:  # noqa: BLE001 - marking is best effort
                             _LOGGER.debug("Could not mark UID %s as seen", uid)
         finally:
@@ -158,14 +165,18 @@ class ImapClient:
 
 
 def _extract_rfc822(payload: Any) -> bytes | None:
-    """Find the RFC822 bytes in an IMAP FETCH response."""
+    """Find message bytes in an IMAP FETCH response.
+
+    Accepts RFC822 and BODY.PEEK/BODY[] partial-fetch responses.
+    """
     if isinstance(payload, (list, tuple)):
         for item in payload:
             if isinstance(item, tuple) and len(item) >= 2:
                 header = item[0]
                 if isinstance(header, bytes):
                     header = header.decode("ascii", errors="ignore")
-                if "RFC822" in str(header).upper():
+                header_text = str(header).upper()
+                if "RFC822" in header_text or "BODY" in header_text:
                     body = item[1]
                     if isinstance(body, (bytes, bytearray)):
                         return bytes(body)

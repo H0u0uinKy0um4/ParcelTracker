@@ -1,0 +1,26 @@
+remove_parcel:
+  name: Remove parcel
+  description: Remove one parcel from storage and delete its entities.
+  fields:
+    carrier:
+      name: Carrier
+      description: Carrier ID stored with the parcel, e.g. ceska_posta.
+      required: true
+      example: ceska_posta
+      selector:
+        text:
+    barcode:
+      name: Tracking number
+      description: Canonical tracking number of the parcel.
+      required: true
+      example: DR1234567890C
+      selector:
+        text:
+
+scan_now:
+  name: Scan now
+  description: Trigger an immediate mailbox and carrier refresh for all configured ParcelTracker entries.
+
+clear_delivered:
+  name: Clear delivered parcels
+  description: Remove all delivered parcels from storage and delete their entities for all configured ParcelTracker entries.

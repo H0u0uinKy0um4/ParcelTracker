@@ -19,6 +19,7 @@ CONF_SENDER_ALLOWLIST = "sender_allowlist"
 CONF_EXTRA_TRACKING_REGEX = "extra_tracking_regex"
 CONF_MARK_SEEN = "mark_seen"
 CONF_INCLUDE_HISTORY = "include_history"
+CONF_CLEANUP_DAYS = "cleanup_days"
 
 # No provider-specific default: the mailbox may be Gmail, Proton, Outlook,
 # Seznam or any other IMAP server. The host is entered in the config flow.
@@ -31,6 +32,8 @@ DEFAULT_SENDER_ALLOWLIST = ""
 DEFAULT_EXTRA_TRACKING_REGEX = ""
 DEFAULT_MARK_SEEN = True
 DEFAULT_INCLUDE_HISTORY = False
+DEFAULT_CLEANUP_DAYS = 30
+MAX_CLEANUP_DAYS = 3650
 
 STORAGE_VERSION = 1
 PARCELS_KEY = "parcels"
@@ -53,3 +56,8 @@ ATTR_FIRST_SEEN = "first_seen"
 EVENT_PARCEL_REGISTERED = f"{DOMAIN}_parcel_registered"
 EVENT_PARCEL_STATUS_CHANGED = f"{DOMAIN}_parcel_status_changed"
 EVENT_PARCEL_DELIVERED = f"{DOMAIN}_parcel_delivered"
+EVENT_PARCEL_REMOVED = f"{DOMAIN}_parcel_removed"
+
+SERVICE_REMOVE_PARCEL = "remove_parcel"
+SERVICE_SCAN_NOW = "scan_now"
+SERVICE_CLEAR_DELIVERED = "clear_delivered"

@@ -59,7 +59,8 @@ carrier-specific changes to entities, coordinator or storage.
    password). Enable IMAP in the provider's settings.
 5. Enter the provider's IMAP host and port (usually 993 with TLS), plus the
    mailbox (label), poll interval, sender allowlist and an extra tracking regex.
-   For Balíkovna notices, `balikovna.cz` is a useful allowlist entry.
+   Set *Remove delivered parcels after days* (default 30, `0` = never). For
+   Balíkovna notices, `balikovna.cz` is a useful allowlist entry.
 
 The `exampleMails/` directory contains real forwarded messages used by the
 parser tests. Redact personal data in them before publishing the repository.
@@ -77,6 +78,7 @@ For each parcel (one device per `carrier:barcode`):
 - `sensor.last_event` — last human-readable carrier event;
 - `sensor.pickup_code` — the `Číslo balíku` value, when present;
 - `binary_sensor.delivered`;
+- `button.remove` — delete this parcel and its device;
 - `button.refresh` — manual refresh for the mailbox.
 
 Status is derived from the **highest rank reached**, not the last event, so
@@ -85,10 +87,39 @@ late designation records cannot turn a delivered parcel back into
 
 Events fired on the HA event bus:
 `parceltracker_parcel_registered`, `parceltracker_parcel_status_changed`,
-`parceltracker_parcel_delivered`.
+`parceltracker_parcel_delivered`, `parceltracker_parcel_removed`.
 
 Polling is dynamic: 15 min when something is out for delivery, 30 min in
 transit, 60 min when idle or at night (00:00–06:00). Email is always polled.
+
+### Cleanup
+
+Delivered parcels are removed automatically after the configured number of
+days (30 by default; `0` disables it). The age is taken from `delivered_at`, or
+from `first_seen` for older records. The UID cursor is not changed, so deleting
+a parcel never causes old mail to be read again.
+
+For manual removal use the per-parcel `button.remove` or call the service:
+
+```yaml
+service: parceltracker.remove_parcel
+data:
+  carrier: ceska_posta
+  barcode: DR1234567890C
+```
+
+You can also trigger an immediate refresh or clear all delivered parcels:
+
+```yaml
+service: parceltracker.scan_now
+```
+
+```yaml
+service: parceltracker.clear_delivered
+```
+
+Removal deletes the stored parcel(s), their entities and devices, and fires
+`parceltracker_parcel_removed` with only the `carrier` and `barcode`.
 
 ### Privacy and limitations
 
@@ -169,7 +200,8 @@ nemění specificky pro dopravce.
    poskytovatele zapněte IMAP.
 5. Zadejte IMAP server a port poskytovatele (obvykle 993 s TLS), schránku
    (štítek), interval, seznam povolených odesílatelů a doplňkový regex pro
-   číslo zásilky. Pro oznámení z Balíkovny se hodí jako povolený odesílatel
+   číslo zásilky. Nastavte *Mazat doručené balíky po dnech* (výchozí 30, `0` =
+   nikdy). Pro oznámení z Balíkovny se hodí jako povolený odesílatel
    `balikovna.cz`.
 
 Adresář `exampleMails/` obsahuje reálné přeposlané zprávy použité v testech
@@ -188,6 +220,7 @@ Pro každý balík (jedno zařízení na `carrier:barcode`):
 - `sensor.last_event` — poslední událost v lidském jazyce;
 - `sensor.pickup_code` — hodnota `Číslo balíku`, pokud je dostupná;
 - `binary_sensor.delivered`;
+- `button.remove` — smaže tento balík a jeho zařízení;
 - `button.refresh` — ruční obnovení schránky.
 
 Stav se odvozuje z **nejvyšší dosažené úrovně**, ne z poslední události, aby
@@ -195,10 +228,39 @@ pozdější evidenční záznamy nevrátily doručený balík zpět na `at_picku
 
 Události na sběrnici HA:
 `parceltracker_parcel_registered`, `parceltracker_parcel_status_changed`,
-`parceltracker_parcel_delivered`.
+`parceltracker_parcel_delivered`, `parceltracker_parcel_removed`.
 
 Dotazování je dynamické: 15 min při doručování, 30 min v přepravě, 60 min při
 nečinnosti a v noci (00:00–06:00). E-mail se vždy kontroluje.
+
+### Mazání balíků
+
+Doručené balíky se automaticky mažou po nastaveném počtu dnů (výchozí 30, `0`
+=vypnuto). Stáří se počítá z `delivered_at`, u starších záznamů z `first_seen`.
+Kurzor UID se nemění, takže smazání balíku nezpůsobí opětovné načtení starých
+e-mailů.
+
+Pro ruční smazání použijte tlačítko `button.remove` u balíku nebo službu:
+
+```yaml
+service: parceltracker.remove_parcel
+data:
+  carrier: ceska_posta
+  barcode: DR1234567890C
+```
+
+Můžete také spustit okamžité obnovení nebo vymazat všechny doručené balíky:
+
+```yaml
+service: parceltracker.scan_now
+```
+
+```yaml
+service: parceltracker.clear_delivered
+```
+
+Smazání odstraní uložený balík(y), jeho entity i zařízení a vyvolá událost
+`parceltracker_parcel_removed` pouze s `carrier` a `barcode`.
 
 ### Soukromí a omezení
 

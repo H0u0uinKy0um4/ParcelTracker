@@ -20,6 +20,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_APP_PASSWORD,
+    CONF_CLEANUP_DAYS,
     CONF_EXTRA_TRACKING_REGEX,
     CONF_IMAP_HOST,
     CONF_IMAP_PORT,
@@ -28,6 +29,7 @@ from .const import (
     CONF_MARK_SEEN,
     CONF_SCAN_INTERVAL,
     CONF_SENDER_ALLOWLIST,
+    DEFAULT_CLEANUP_DAYS,
     DEFAULT_EXTRA_TRACKING_REGEX,
     DEFAULT_IMAP_HOST,
     DEFAULT_IMAP_PORT,
@@ -37,6 +39,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SENDER_ALLOWLIST,
     DOMAIN,
+    MAX_CLEANUP_DAYS,
     MIN_SCAN_INTERVAL,
 )
 from .imap_client import ImapClient, MailboxError
@@ -91,6 +94,10 @@ def _general_schema(values: dict[str, Any]) -> vol.Schema:
                 CONF_INCLUDE_HISTORY,
                 default=values.get(CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY),
             ): bool,
+            vol.Optional(
+                CONF_CLEANUP_DAYS,
+                default=values.get(CONF_CLEANUP_DAYS, DEFAULT_CLEANUP_DAYS),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_CLEANUP_DAYS)),
         }
     )
 
@@ -156,6 +163,7 @@ class ParcelTrackerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EXTRA_TRACKING_REGEX: DEFAULT_EXTRA_TRACKING_REGEX,
             CONF_MARK_SEEN: DEFAULT_MARK_SEEN,
             CONF_INCLUDE_HISTORY: DEFAULT_INCLUDE_HISTORY,
+            CONF_CLEANUP_DAYS: DEFAULT_CLEANUP_DAYS,
         }
         schema = vol.Schema(
             {

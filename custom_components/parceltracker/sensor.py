@@ -8,13 +8,13 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ParcelTrackerRuntime
 from .const import CONF_INCLUDE_HISTORY, DOMAIN
 from .coordinator import ParcelCoordinator
+from .parcel_entities import ParcelEntityMixin, parcel_unique_id
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -57,15 +57,18 @@ async def async_setup_entry(
     @callback
     def _async_add_new_entities() -> None:
         new: list[ParcelSensor] = []
+        valid: set[str] = set()
         for key, parcel in (coordinator.data or {}).items():
             for description in SENSORS:
-                unique_id = f"{entry.entry_id}:{key}:{description.key}"
-                if unique_id in added:
-                    continue
                 if description.key == "pickup_code" and not parcel.get("pickup_code"):
+                    continue
+                unique_id = parcel_unique_id(entry.entry_id, key, description.key)
+                valid.add(unique_id)
+                if unique_id in added:
                     continue
                 added.add(unique_id)
                 new.append(ParcelSensor(coordinator, entry.entry_id, key, description))
+        added.intersection_update(valid)
         if new:
             async_add_entities(new)
 
@@ -73,7 +76,9 @@ async def async_setup_entry(
     _async_add_new_entities()
 
 
-class ParcelSensor(CoordinatorEntity[ParcelCoordinator], SensorEntity):
+class ParcelSensor(
+    ParcelEntityMixin, CoordinatorEntity[ParcelCoordinator], SensorEntity
+):
     """A single canonical field of one parcel."""
 
     entity_description: ParcelSensorDescription
@@ -88,26 +93,15 @@ class ParcelSensor(CoordinatorEntity[ParcelCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
-        self._parcel_key = parcel_key
-        self._attr_unique_id = f"{entry_id}:{parcel_key}:{description.key}"
-        barcode = parcel_key.rpartition(":")[2]
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, parcel_key)},
-            name=f"Parcel {barcode}",
-            manufacturer="ParcelTracker",
-        )
-
-    @property
-    def _parcel(self) -> dict[str, Any] | None:
-        return (self.coordinator.data or {}).get(self._parcel_key)
+        self.init_parcel_entity(coordinator, entry_id, parcel_key, description.key)
 
     @property
     def available(self) -> bool:
-        return super().available and self._parcel is not None
+        return self.parcel_available
 
     @property
     def native_value(self) -> str | None:
-        parcel = self._parcel
+        parcel = self.parcel
         if parcel is None:
             return None
         value = parcel.get(self.entity_description.field)
@@ -116,7 +110,7 @@ class ParcelSensor(CoordinatorEntity[ParcelCoordinator], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose the canonical parcel shape without raw email content."""
-        parcel = self._parcel
+        parcel = self.parcel
         if parcel is None:
             return {}
         include_history = bool(

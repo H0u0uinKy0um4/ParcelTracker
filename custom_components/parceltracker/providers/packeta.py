@@ -12,14 +12,13 @@ The helper is injected; Packeta is the one carrier that needs the optional
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Any
 from urllib.parse import quote
 
 from ..models import ProviderParcel
-from . import JsonFetcher, register_provider
+from . import JsonFetcher, register_provider, track_per_code
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -126,6 +125,16 @@ class PacketaProvider:
         """Match the ``Z`` + ten digits barcode shape."""
         return bool(_CODE_RE.fullmatch((code or "").strip().upper()))
 
+    @classmethod
+    def extract_codes_from_text(cls, text: str) -> list[str]:
+        """Extract Packeta barcode candidates from text."""
+        found: list[str] = []
+        for match in re.finditer(r"\bZ[\s\-]*\d(?:[\s\-]*\d){9}\b", text or "", re.IGNORECASE):
+            code = re.sub(r"[\s\-]+", "", match.group(0)).upper()
+            if cls.match_tracking_code(code):
+                found.append(code)
+        return found
+
     def tracking_url(self, code: str) -> str | None:
         """Return the public Packeta tracking deep-link."""
         if not code:
@@ -136,27 +145,15 @@ class PacketaProvider:
         self, codes: list[str] | tuple[str, ...], fetch_json: JsonFetcher
     ) -> dict[str, ProviderParcel]:
         """Fetch every barcode with POST and return ``ProviderParcel`` objects."""
-        codes = list(dict.fromkeys(code for code in codes if code))
-        if not codes:
-            return {}
-
-        results = await asyncio.gather(
-            *(self._async_one(code, fetch_json) for code in codes),
-            return_exceptions=True,
+        return await track_per_code(
+            carrier=CARRIER_ID,
+            codes=codes,
+            fetch_one=lambda code: self._async_one(code, fetch_json),
+            tracking_url=self.tracking_url,
+            logger=_LOGGER,
+            label="Packeta",
+            request_error="Packeta request failed",
         )
-        tracked: dict[str, ProviderParcel] = {}
-        for code, parcel in zip(codes, results, strict=True):
-            if isinstance(parcel, BaseException):
-                _LOGGER.warning("Packeta tracking failed for %s: %s", code, parcel)
-                tracked[code] = ProviderParcel(
-                    carrier=CARRIER_ID,
-                    barcode=code,
-                    url=self.tracking_url(code),
-                    error=f"Packeta request failed: {parcel}",
-                )
-            else:
-                tracked[code] = parcel
-        return tracked
 
     async def _async_one(self, code: str, fetch_json: JsonFetcher) -> ProviderParcel:
         """Fetch and normalise one barcode."""

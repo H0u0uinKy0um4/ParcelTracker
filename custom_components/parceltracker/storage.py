@@ -7,10 +7,12 @@ carriers can legitimately use the same barcode in the future.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .const import HISTORY_MAX_EVENTS
 from .models import ParcelStatus
+from .parcels import parse_iso
 
 
 def parcel_key(carrier: str | None, barcode: str) -> str:
@@ -22,6 +24,42 @@ def split_key(key: str) -> tuple[str, str]:
     """Split a storage key into ``(carrier, barcode)``."""
     carrier, separator, barcode = key.partition(":")
     return (carrier, barcode) if separator else ("unknown", carrier)
+
+
+def prune_delivered(
+    parcels: dict[str, dict[str, Any]],
+    *,
+    days: int,
+    now: datetime | None = None,
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Remove delivered parcels older than ``days`` days.
+
+    ``delivered_at`` is preferred; older stored records fall back to
+    ``first_seen``. ``days <= 0`` disables pruning. Returns the kept parcels and
+    the removed keys so the caller can fire events and clean up entities.
+    """
+    if days <= 0:
+        return dict(parcels), []
+
+    reference = now or datetime.now(UTC)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=UTC)
+    cutoff = reference - timedelta(days=days)
+
+    kept: dict[str, dict[str, Any]] = {}
+    removed: list[str] = []
+    for key, parcel in parcels.items():
+        if not parcel.get("delivered"):
+            kept[key] = parcel
+            continue
+        stamp = parse_iso(parcel.get("delivered_at")) or parse_iso(
+            parcel.get("first_seen")
+        )
+        if stamp is None or stamp > cutoff:
+            kept[key] = parcel
+            continue
+        removed.append(key)
+    return kept, removed
 
 
 def sanitize_stored(data: Any) -> dict[str, dict[str, Any]]:

@@ -12,7 +12,9 @@ from custom_components.parceltracker.models import ParcelStatus
 from custom_components.parceltracker.parcels import derive_status, normalize_parcel
 from custom_components.parceltracker.providers import (
     _PROVIDERS,
+    RecognizedCode,
     detect_provider,
+    extract_codes_from_text,
     get_provider,
     registered_providers,
     register_provider,
@@ -85,6 +87,20 @@ class ProviderTests(unittest.TestCase):
 
     def test_tracking_url(self) -> None:
         self.assertIn(CODE, CeskaPostaProvider().tracking_url(CODE) or "")
+
+    def test_extract_codes_from_text_uses_provider_seam(self) -> None:
+        text = "Packeta Z 602 7037 619, Allegro A0069G83L2, CP RR 123 456 789 CZ, num 12345678"
+        recognized = extract_codes_from_text(text)
+        self.assertEqual(
+            [(item.carrier, item.code, item.numeric) for item in recognized],
+            [
+                ("packeta", "Z6027037619", False),
+                ("ceska_posta", "RR123456789CZ", False),
+                ("ceska_posta", "12345678", True),
+                ("allegro", "A0069G83L2", False),
+            ],
+        )
+        self.assertTrue(all(isinstance(item, RecognizedCode) for item in recognized))
 
     def test_new_carrier_can_be_registered_without_entity_changes(self) -> None:
         class DummyProvider:

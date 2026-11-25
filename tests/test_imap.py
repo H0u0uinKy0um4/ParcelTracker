@@ -33,6 +33,7 @@ class FakeImap:
         self.messages = messages
         self.fail_login = fail_login
         self.stored: list[tuple[int, str, str]] = []
+        self.fetches: list[tuple[int, str]] = []
         self.selected: tuple[str, bool] | None = None
         self.logged_out = False
 
@@ -48,8 +49,10 @@ class FakeImap:
             return "OK", [b" ".join(str(uid).encode() for uid in self.messages)]
         if command == "FETCH":
             uid = int(args[0])
+            request = str(args[1])
+            self.fetches.append((uid, request))
             raw = self.messages.get(uid, b"")
-            header = f"{uid} (RFC822 {{{len(raw)}}}".encode()
+            header = f"{uid} ({request} {{{len(raw)}}}".encode()
             return "OK", [(header, raw)]
         if command == "STORE":
             self.stored.append((int(args[0]), str(args[1]), str(args[2])))
@@ -71,7 +74,7 @@ class ImapClientTests(unittest.TestCase):
             "burner@example.com",
             "app-password",
             "imap.example.com",
-            connection_factory=lambda *_: self.connection,
+            connection_factory=lambda *_, **__: self.connection,
         )
 
     def test_fetch_with_allowlist_and_mark_seen(self) -> None:
@@ -90,6 +93,7 @@ class ImapClientTests(unittest.TestCase):
         self.assertEqual([uid for uid, _, _ in self.connection.stored], [1])
         self.assertTrue(self.connection.logged_out)
         self.assertEqual(self.connection.selected, ("INBOX", False))
+        self.assertTrue(all("BODY.PEEK[]" in req for _, req in self.connection.fetches))
 
     def test_readonly_mode_does_not_mark_seen(self) -> None:
         self.client.fetch_new_messages(None, 10, False, (), ())
@@ -109,7 +113,7 @@ class ImapClientTests(unittest.TestCase):
             "burner@example.com",
             "bad-password",
             "imap.example.com",
-            connection_factory=lambda *_: failing,
+            connection_factory=lambda *_, **__: failing,
         )
         with self.assertRaises(MailboxError) as err:
             client.validate_login()
@@ -117,10 +121,10 @@ class ImapClientTests(unittest.TestCase):
 
     def test_uses_configured_host_and_port(self) -> None:
         """Any IMAP provider works; no host is hard-coded to Gmail."""
-        calls: list[tuple[str, int]] = []
+        calls: list[tuple[str, int, dict[str, object]]] = []
 
-        def factory(host: str, port: int) -> FakeImap:
-            calls.append((host, port))
+        def factory(host: str, port: int, **kwargs: object) -> FakeImap:
+            calls.append((host, port, kwargs))
             return self.connection
 
         client = ImapClient(
@@ -128,7 +132,9 @@ class ImapClientTests(unittest.TestCase):
             connection_factory=factory,
         )
         self.assertTrue(client.validate_login())
-        self.assertEqual(calls, [("imap.example.org", 1143)])
+        self.assertEqual(
+            calls, [("imap.example.org", 1143, {"timeout": 30})]
+        )
 
     def test_allowlist_helper(self) -> None:
         self.assertEqual(parse_allowlist("a@example.com, b@example.com"), ("a@example.com", "b@example.com"))

@@ -23,7 +23,7 @@ from typing import Any
 from urllib.parse import quote
 
 from ..models import ProviderParcel
-from . import JsonFetcher, register_provider
+from . import JsonFetcher, dedupe_codes, register_provider
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +40,9 @@ BATCH_SIZE = 10
 
 _CODE_RE = re.compile(r"^[A-Z]{1,2}\d{9,11}[A-Z]{0,2}$")
 _NUMERIC_RE = re.compile(r"^\d{8,13}$")
+_TEXT_CODE_RE = re.compile(r"\b[A-Z]{1,2}\d{9,11}[A-Z]{0,2}\b")
+_TEXT_POSTAL_RE = re.compile(r"\b[A-Z]{2} ?\d{3} ?\d{3} ?\d{3} ?[A-Z]{2}\b")
+_TEXT_NUMERIC_RE = re.compile(r"\b\d{8,13}\b")
 _NOT_FOUND_CODES = frozenset({"-3", "-4"})
 
 
@@ -126,6 +129,27 @@ class CeskaPostaProvider:
         normalized = (code or "").strip().upper()
         return bool(_CODE_RE.fullmatch(normalized) or _NUMERIC_RE.fullmatch(normalized))
 
+    @classmethod
+    def extract_codes_from_text(cls, text: str) -> list[tuple[str, bool]]:
+        """Extract CP/Balíkovna code candidates from text."""
+        upper = (text or "").upper()
+        found: list[tuple[str, bool]] = []
+        seen: set[str] = set()
+
+        def add(code: str, numeric: bool) -> None:
+            normalized = (code or "").replace(" ", "").upper()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                found.append((normalized, numeric))
+
+        for match in _TEXT_POSTAL_RE.finditer(upper):
+            add(match.group(0), False)
+        for match in _TEXT_CODE_RE.finditer(upper):
+            add(match.group(0), False)
+        for match in _TEXT_NUMERIC_RE.finditer(upper):
+            add(match.group(0), True)
+        return found
+
     def tracking_url(self, code: str) -> str | None:
         """Return the Balíkovna tracking deep-link."""
         if not code:
@@ -136,7 +160,7 @@ class CeskaPostaProvider:
         self, codes: list[str] | tuple[str, ...], fetch_json: JsonFetcher
     ) -> dict[str, ProviderParcel]:
         """Fetch both JSON surfaces for every code and return ProviderParcels."""
-        codes = list(dict.fromkeys(code for code in codes if code))
+        codes = dedupe_codes(codes)
         if not codes:
             return {}
 

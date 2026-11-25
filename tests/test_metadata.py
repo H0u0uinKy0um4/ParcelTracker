@@ -10,7 +10,14 @@ import json
 from pathlib import Path
 import unittest
 
-from custom_components.parceltracker.const import DEFAULT_IMAP_HOST, DOMAIN, PLATFORMS
+from custom_components.parceltracker.const import (
+    CONF_CLEANUP_DAYS,
+    DEFAULT_CLEANUP_DAYS,
+    DEFAULT_IMAP_HOST,
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_REMOVE_PARCEL,
+)
 from custom_components.parceltracker.parsers import (
     decode_header_value,
     decode_part,
@@ -44,6 +51,20 @@ class MetadataTests(unittest.TestCase):
         en_fields = set(english["config"]["step"]["user"]["data"])
         cs_fields = set(czech["config"]["step"]["user"]["data"])
         self.assertEqual(en_fields, cs_fields)
+        self.assertIn(CONF_CLEANUP_DAYS, en_fields)
+        self.assertIn(CONF_CLEANUP_DAYS, cs_fields)
+
+    def test_remove_service_metadata_is_bilingual(self) -> None:
+        english = _load_json(COMPONENT / "translations" / "en.json")
+        czech = _load_json(COMPONENT / "translations" / "cs.json")
+        strings = _load_json(COMPONENT / "strings.json")
+        for translations in (english, czech, strings):
+            self.assertIn(SERVICE_REMOVE_PARCEL, translations["services"])
+            self.assertIn("remove", translations["entity"]["button"])
+        service = (COMPONENT / "services.yaml").read_text(encoding="utf-8")
+        self.assertIn(SERVICE_REMOVE_PARCEL, service)
+        self.assertIn("carrier:", service)
+        self.assertIn("barcode:", service)
 
     def test_platforms_are_carrier_agnostic(self) -> None:
         self.assertEqual(set(PLATFORMS), {"sensor", "binary_sensor", "button"})
@@ -65,6 +86,16 @@ class MetadataTests(unittest.TestCase):
         source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
         self.assertIn('method: str = "GET"', source)
         self.assertIn("self._session.request(", source)
+
+    def test_cleanup_and_service_are_wired(self) -> None:
+        coordinator = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+        init = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+        self.assertEqual(DEFAULT_CLEANUP_DAYS, 30)
+        self.assertIn("prune_delivered(", coordinator)
+        self.assertIn("async_remove_parcel(", coordinator)
+        self.assertIn("async_get_entity_id(", coordinator)
+        self.assertIn("async_setup(", init)
+        self.assertIn(SERVICE_REMOVE_PARCEL, init)
 
     def test_no_raw_email_fields_in_entities(self) -> None:
         source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")

@@ -14,7 +14,8 @@
           "sender_allowlist": "Povolení odesílatelé (odděleno čárkou, volitelné)",
           "extra_tracking_regex": "Extra regex pro číslo zásilky (jedna na řádek, volitelné)",
           "mark_seen": "Označit zpracované zprávy jako přečtené",
-          "include_history": "Ukládat historii událostí do atributů"
+          "include_history": "Ukládat historii událostí do atributů",
+          "cleanup_days": "Mazat doručené balíky po dnech (0 = nikdy)"
         }
       }
     },
@@ -48,7 +49,8 @@
           "sender_allowlist": "Povolení odesílatelé (odděleno čárkou, volitelné)",
           "extra_tracking_regex": "Extra regex pro číslo zásilky (jedna na řádek, volitelné)",
           "mark_seen": "Označit zpracované zprávy jako přečtené",
-          "include_history": "Ukládat historii událostí do atributů"
+          "include_history": "Ukládat historii událostí do atributů",
+          "cleanup_days": "Mazat doručené balíky po dnech (0 = nikdy)"
         }
       },
       "credentials": {
@@ -76,7 +78,32 @@
       "delivered": { "name": "Doručeno" }
     },
     "button": {
-      "refresh": { "name": "Obnovit balíky" }
+      "refresh": { "name": "Obnovit balíky" },
+      "remove": { "name": "Odebrat balík" }
+    }
+  },
+  "services": {
+    "remove_parcel": {
+      "name": "Odebrat balík",
+      "description": "Odebere jeden balík z úložiště a smaže jeho entity.",
+      "fields": {
+        "carrier": {
+          "name": "Dopravce",
+          "description": "ID dopravce uložené u balíku, např. ceska_posta."
+        },
+        "barcode": {
+          "name": "Číslo zásilky",
+          "description": "Kanonické číslo zásilky."
+        }
+      }
+    },
+    "scan_now": {
+      "name": "Skenovat teď",
+      "description": "Spustí okamžité obnovení schránky a dopravců pro všechny nakonfigurované položky ParcelTrackeru."
+    },
+    "clear_delivered": {
+      "name": "Vymazat doručené balíky",
+      "description": "Odebere všechny doručené balíky z úložiště a smaže jejich entity pro všechny nakonfigurované položky ParcelTrackeru."
     }
   }
 }

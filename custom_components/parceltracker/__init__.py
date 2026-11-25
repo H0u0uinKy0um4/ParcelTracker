@@ -3,14 +3,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, PLATFORMS, STORAGE_VERSION
+from .const import (
+    ATTR_BARCODE,
+    ATTR_CARRIER,
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_CLEAR_DELIVERED,
+    SERVICE_REMOVE_PARCEL,
+    SERVICE_SCAN_NOW,
+    STORAGE_VERSION,
+)
 from .coordinator import ParcelCoordinator
+from .storage import parcel_key
+
+_LOGGER = logging.getLogger(__name__)
+
+REMOVE_PARCEL_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CARRIER): str,
+        vol.Required(ATTR_BARCODE): str,
+    }
+)
 
 
 @dataclass(slots=True)
@@ -19,6 +42,48 @@ class ParcelTrackerRuntime:
 
     coordinator: ParcelCoordinator
     store: Store
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register integration-wide services once."""
+
+    async def _async_remove_parcel(call: ServiceCall) -> None:
+        carrier = str(call.data[ATTR_CARRIER]).strip()
+        barcode = str(call.data[ATTR_BARCODE]).strip()
+        if not carrier or not barcode:
+            return
+
+        key = parcel_key(carrier, barcode)
+        removed = False
+        for runtime in list(hass.data.get(DOMAIN, {}).values()):
+            if await runtime.coordinator.async_remove_parcel(key):
+                removed = True
+        if not removed:
+            _LOGGER.debug(
+                "Parcel removal requested but not found: carrier=%s barcode=%s",
+                carrier,
+                barcode,
+            )
+
+    async def _async_scan_now(call: ServiceCall) -> None:
+        for runtime in list(hass.data.get(DOMAIN, {}).values()):
+            await runtime.coordinator.async_request_refresh()
+
+    async def _async_clear_delivered(call: ServiceCall) -> None:
+        for runtime in list(hass.data.get(DOMAIN, {}).values()):
+            await runtime.coordinator.async_clear_delivered()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REMOVE_PARCEL,
+        _async_remove_parcel,
+        schema=REMOVE_PARCEL_SCHEMA,
+    )
+    hass.services.async_register(DOMAIN, SERVICE_SCAN_NOW, _async_scan_now)
+    hass.services.async_register(
+        DOMAIN, SERVICE_CLEAR_DELIVERED, _async_clear_delivered
+    )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

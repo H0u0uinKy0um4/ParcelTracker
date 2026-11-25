@@ -10,14 +10,13 @@ This provider is pure: the HTTP client is injected as ``fetch_json``.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Any
 from urllib.parse import quote
 
 from ..models import ProviderParcel
-from . import JsonFetcher, register_provider
+from . import JsonFetcher, register_provider, track_per_code
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,6 +102,14 @@ class AllegroProvider:
         """Match Allegro One alphanumeric waybills (e.g. ``A0069G83L2``)."""
         return bool(_CODE_RE.fullmatch((code or "").strip().upper()))
 
+    @classmethod
+    def extract_codes_from_text(cls, text: str) -> list[str]:
+        """Extract Allegro One waybill candidates from text."""
+        return [
+            m.group(0).upper()
+            for m in re.finditer(r"\bA\d[A-Z0-9]{8,11}\b", text or "", re.IGNORECASE)
+        ]
+
     def tracking_url(self, code: str) -> str | None:
         """Return the keyless tracking endpoint as a code-specific deep-link."""
         if not code:
@@ -113,27 +120,15 @@ class AllegroProvider:
         self, codes: list[str] | tuple[str, ...], fetch_json: JsonFetcher
     ) -> dict[str, ProviderParcel]:
         """Fetch events for every code and return ``ProviderParcel`` objects."""
-        codes = list(dict.fromkeys(code for code in codes if code))
-        if not codes:
-            return {}
-
-        results = await asyncio.gather(
-            *(self._async_one(code, fetch_json) for code in codes),
-            return_exceptions=True,
+        return await track_per_code(
+            carrier=CARRIER_ID,
+            codes=codes,
+            fetch_one=lambda code: self._async_one(code, fetch_json),
+            tracking_url=self.tracking_url,
+            logger=_LOGGER,
+            label="Allegro",
+            request_error="Allegro request failed",
         )
-        tracked: dict[str, ProviderParcel] = {}
-        for code, parcel in zip(codes, results, strict=True):
-            if isinstance(parcel, BaseException):
-                _LOGGER.warning("Allegro tracking failed for %s: %s", code, parcel)
-                tracked[code] = ProviderParcel(
-                    carrier=CARRIER_ID,
-                    barcode=code,
-                    url=self.tracking_url(code),
-                    error=f"Allegro request failed: {parcel}",
-                )
-            else:
-                tracked[code] = parcel
-        return tracked
 
     async def _async_one(self, code: str, fetch_json: JsonFetcher) -> ProviderParcel:
         """Fetch and normalise one waybill."""
