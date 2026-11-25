@@ -6,9 +6,9 @@ import logging
 from typing import Any, Callable
 
 from .models import ParcelStatus
-from .parcels import merge_parcel, normalize_parcel
+from .parcels import normalize_parcel
 from .providers import JsonFetcher, provider_instance
-from .storage import split_key
+from .storage import merge_parcel, split_key
 
 _LOGGER = logging.getLogger(__name__)
 
