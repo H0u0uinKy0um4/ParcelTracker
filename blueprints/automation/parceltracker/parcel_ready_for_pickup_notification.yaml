@@ -1,0 +1,42 @@
+blueprint:
+  name: ParcelTracker - Ready for pickup notification
+  description: Send a notification when a ParcelTracker parcel status changes to ready for pickup.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: Notify service name, for example notify.mobile_app_phone.
+      selector:
+        text:
+    title:
+      name: Notification title
+      default: Parcel ready for pickup
+      selector:
+        text:
+    message:
+      name: Notification message
+      description: You can use {{ carrier }}, {{ barcode }}, {{ status }}, and {{ old_status }} templates.
+      default: "{{ carrier }} parcel {{ barcode }} is ready for pickup."
+      selector:
+        text:
+          multiline: true
+
+mode: single
+
+trigger:
+  - platform: event
+    event_type: parceltracker_parcel_status_changed
+    event_data:
+      status: at_pickup_point
+
+variables:
+    carrier: "{{ trigger.event.data.carrier | default('unknown') }}"
+    barcode: "{{ trigger.event.data.barcode | default('unknown') }}"
+    status: "{{ trigger.event.data.status | default('unknown') }}"
+    old_status: "{{ trigger.event.data.old_status | default('unknown') }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: !input title
+      message: !input message

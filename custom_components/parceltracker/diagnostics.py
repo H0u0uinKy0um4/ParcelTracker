@@ -34,6 +34,7 @@ async def async_get_config_entry_diagnostics(
         "last_scan_at": coordinator.last_scan_at,
         "last_scan_scanned": coordinator.last_scan_scanned,
         "last_scan_matched": coordinator.last_scan_matched,
+        "last_scan_unmatched": coordinator.last_scan_unmatched,
         "last_uid": coordinator._last_uid,
         "last_error": coordinator.last_error,
         "parcel_count": coordinator.parcel_count,

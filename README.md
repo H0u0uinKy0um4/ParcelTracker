@@ -26,7 +26,9 @@ container or add-on is required.
    - Allegro One: `https://edge.allegro.pl/ad/tracking?packageNo=<code>`
      (undocumented edge endpoint, GET),
    - Packeta / Zásilkovna: `POST https://tracking.packeta.com/api/getPacketById/<code>/en`
-     (the one keyless endpoint that requires POST).
+     (the one keyless endpoint that requires POST),
+   - PPL CZ: `POST https://api.dhl.com/ecs/ppl/webapi/TrackAndTrace/<code>`
+     (public widget backend; empty JSON body and public client key header).
 4. Parcels are stored via Home Assistant `Store` and published with the
    canonical `ha-parcel-integrations` shape, so `ha-parcel-aggregator` can
    consume them. **Do not install `ha-ceska-posta` alongside this integration**
@@ -39,8 +41,8 @@ container or add-on is required.
 | Česká pošta / Balíkovna | Implemented | `ceska_posta` |
 | Allegro One | Implemented (unofficial edge endpoint) | `allegro` |
 | Packeta / Zásilkovna | Implemented (POST web endpoint) | `packeta` |
+| PPL CZ | Implemented (public TrackAndTrace endpoint) | `ppl` |
 | DPD CZ | Planned | — |
-| PPL CZ | Planned | — |
 | GLS CZ, Geis, DHL, InPost | Planned | — |
 
 The architecture is multi-carrier from day one: one config entry is one
@@ -91,6 +93,18 @@ Events fired on the HA event bus:
 
 Polling is dynamic: 15 min when something is out for delivery, 30 min in
 transit, 60 min when idle or at night (00:00–06:00). Email is always polled.
+
+#### Automation blueprints
+
+Ready-to-use blueprints are included in `blueprints/automation/parceltracker/`:
+
+- `parcel_delivered_notification.yaml`
+- `parcel_ready_for_pickup_notification.yaml`
+- `parcel_status_changed_notification.yaml`
+
+Import them in Home Assistant (Settings → Automations & Scenes → Blueprints →
+Import Blueprint) using the raw GitHub file URL, or copy them into your local
+`config/blueprints/automation/parceltracker/` directory.
 
 ### Cleanup
 
@@ -167,7 +181,9 @@ Docker ani doplněk.
    - Allegro One: `https://edge.allegro.pl/ad/tracking?packageNo=<code>`
      (neoficiální edge endpoint, GET),
    - Packeta / Zásilkovna: `POST https://tracking.packeta.com/api/getPacketById/<code>/en`
-     (jediný keyless endpoint, který vyžaduje POST).
+     (jediný keyless endpoint, který vyžaduje POST),
+   - PPL CZ: `POST https://api.dhl.com/ecs/ppl/webapi/TrackAndTrace/<code>`
+     (veřejný backend widgetu; prázdné JSON tělo a veřejný klíč klienta v hlavičce).
 4. Balíky se ukládají přes `Store` a vystavují v kanonickém formátu rodiny
    `ha-parcel-integrations`, takže je umí zpracovat `ha-parcel-aggregator`.
    **Neinstalujte vedle této integrace `ha-ceska-posta`**, jinak se balíky
@@ -180,8 +196,8 @@ Docker ani doplněk.
 | Česká pošta / Balíkovna | Implementováno | `ceska_posta` |
 | Allegro One | Implementováno (neoficiální edge endpoint) | `allegro` |
 | Packeta / Zásilkovna | Implementováno (POST web endpoint) | `packeta` |
+| PPL CZ | Implementováno (veřejný TrackAndTrace endpoint) | `ppl` |
 | DPD CZ | Plánováno | — |
-| PPL CZ | Plánováno | — |
 | GLS CZ, Geis, DHL, InPost | Plánováno | — |
 
 Architektura je od začátku multi-carrier: jedna konfigurační položka = jedna
@@ -232,6 +248,18 @@ Události na sběrnici HA:
 
 Dotazování je dynamické: 15 min při doručování, 30 min v přepravě, 60 min při
 nečinnosti a v noci (00:00–06:00). E-mail se vždy kontroluje.
+
+#### Automatizační blueprinty
+
+Připravené blueprinty jsou v `blueprints/automation/parceltracker/`:
+
+- `parcel_delivered_notification.yaml`
+- `parcel_ready_for_pickup_notification.yaml`
+- `parcel_status_changed_notification.yaml`
+
+Importujte je v Home Assistantu (Nastavení → Automatizace a scény → Blueprinty →
+Importovat blueprint) pomocí raw URL souboru na GitHubu, nebo je zkopírujte do
+lokálního adresáře `config/blueprints/automation/parceltracker/`.
 
 ### Mazání balíků
 

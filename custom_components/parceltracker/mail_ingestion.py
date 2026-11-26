@@ -23,6 +23,7 @@ class MailIngestionResult:
     last_uid: int
     scanned: int
     matched: int
+    unmatched: int = 0
     error: str | None = None
 
 
@@ -70,10 +71,12 @@ async def async_ingest_mail(
 
     scanned = result.scanned
     matched = len(result.messages)
+    unmatched = 0
     now = now_iso()
     for fetched in result.messages:
         parsed = fetched.parsed
         if not parsed.tracking_code:
+            unmatched += 1
             continue
         key = parcel_key(parsed.carrier, parsed.tracking_code)
         existing = parcels.get(key)
@@ -100,5 +103,8 @@ async def async_ingest_mail(
             parsed.tracking_code,
         )
     return MailIngestionResult(
-        last_uid=max(last_uid, result.last_uid), scanned=scanned, matched=matched
+        last_uid=max(last_uid, result.last_uid),
+        scanned=scanned,
+        matched=matched,
+        unmatched=unmatched,
     )

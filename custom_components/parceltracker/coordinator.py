@@ -57,6 +57,17 @@ _LOGGER = logging.getLogger(__name__)
 class TrackingFetchError(Exception):
     """A carrier endpoint returned an unexpected response."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        body: Any = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.body = body
+
 
 class ParcelCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Owns the persisted parcels for one mailbox."""
@@ -88,24 +99,41 @@ class ParcelCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.last_scan_at: str | None = None
         self.last_scan_scanned: int = 0
         self.last_scan_matched: int = 0
+        self.last_scan_unmatched: int = 0
         self.last_error: str | None = None
 
     async def _fetch_json(
-        self, url: str, *, method: str = "GET", headers: dict[str, str] | None = None
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        headers: dict[str, str] | None = None,
+        json: Any = None,
     ) -> Any:
         """Fetch a keyless carrier endpoint and decode JSON regardless of MIME.
 
-        ``method``/``headers`` are generic optional knobs: most endpoints use GET
-        with default headers, while some keyless endpoints need POST or a specific
-        Accept header.
+        ``method``/``headers``/``json`` are generic optional knobs: most endpoints
+        use GET with default headers, while some keyless endpoints need POST, a
+        specific Accept header, or a JSON body.
         """
         try:
             async with self._session.request(
-                method.upper(), url, headers=headers
+                method.upper(), url, headers=headers, json=json
             ) as response:
+                body: Any = None
+                try:
+                    body = await response.json(content_type=None)
+                except (ClientError, ValueError) as err:
+                    if response.status == 200:
+                        raise TrackingFetchError(str(err), status=response.status) from err
+                    body = None
                 if response.status != 200:
-                    raise TrackingFetchError(f"HTTP {response.status}")
-                return await response.json(content_type=None)
+                    raise TrackingFetchError(
+                        f"HTTP {response.status}", status=response.status, body=body
+                    )
+                return body
+        except TrackingFetchError:
+            raise
         except (ClientError, ValueError) as err:
             raise TrackingFetchError(str(err)) from err
 
@@ -174,6 +202,7 @@ class ParcelCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return last_uid
         self.last_scan_scanned = result.scanned
         self.last_scan_matched = result.matched
+        self.last_scan_unmatched = result.unmatched
         return result.last_uid
 
     async def _async_refresh_parcels(

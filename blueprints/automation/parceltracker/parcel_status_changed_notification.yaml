@@ -1,0 +1,40 @@
+blueprint:
+  name: ParcelTracker - Status changed notification
+  description: Send a notification when a ParcelTracker parcel status changes.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: Notify service name, for example notify.mobile_app_phone.
+      selector:
+        text:
+    title:
+      name: Notification title
+      default: Parcel status changed
+      selector:
+        text:
+    message:
+      name: Notification message
+      description: You can use {{ carrier }}, {{ barcode }}, {{ status }}, and {{ old_status }} templates.
+      default: "{{ carrier }} parcel {{ barcode }} changed from {{ old_status }} to {{ status }}."
+      selector:
+        text:
+          multiline: true
+
+mode: single
+
+trigger:
+  - platform: event
+    event_type: parceltracker_parcel_status_changed
+
+variables:
+    carrier: "{{ trigger.event.data.carrier | default('unknown') }}"
+    barcode: "{{ trigger.event.data.barcode | default('unknown') }}"
+    status: "{{ trigger.event.data.status | default('unknown') }}"
+    old_status: "{{ trigger.event.data.old_status | default('unknown') }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: !input title
+      message: !input message

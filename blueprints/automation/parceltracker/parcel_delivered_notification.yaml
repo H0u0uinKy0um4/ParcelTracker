@@ -1,0 +1,38 @@
+blueprint:
+  name: ParcelTracker - Delivered notification
+  description: Send a notification when a ParcelTracker parcel is delivered.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: Notify service name, for example notify.mobile_app_phone.
+      selector:
+        text:
+    title:
+      name: Notification title
+      default: Parcel delivered
+      selector:
+        text:
+    message:
+      name: Notification message
+      description: You can use {{ carrier }} and {{ barcode }} templates.
+      default: "{{ carrier }} parcel {{ barcode }} was delivered."
+      selector:
+        text:
+          multiline: true
+
+mode: single
+
+trigger:
+  - platform: event
+    event_type: parceltracker_parcel_delivered
+
+variables:
+    carrier: "{{ trigger.event.data.carrier | default('unknown') }}"
+    barcode: "{{ trigger.event.data.barcode | default('unknown') }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: !input title
+      message: !input message
