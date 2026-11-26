@@ -31,6 +31,8 @@ STATUS_RANK: dict[str, tuple[int, ParcelStatus]] = {
     "82": (60, ParcelStatus.AT_PICKUP_POINT),
     # Carrier-neutral code used by providers for "posted back"/"returned".
     "RETURNING": (70, ParcelStatus.RETURNING),
+    # Carrier-neutral code used by providers for an exception/problem state.
+    "PROBLEM": (65, ParcelStatus.PROBLEM),
     "91": (90, ParcelStatus.DELIVERED),
 }
 

@@ -251,8 +251,11 @@ async def track_per_code(
 
 # Importing registers providers. Keep this at the bottom to avoid cycles.
 # Registration order is also detection precedence. Packeta's ``Z`` + ten
-# digits also fits the generic postal shape, so it must be matched first;
-# Allegro waybills contain mixed letters and cannot collide with ČP codes.
+# digits also fits the generic postal shape, so it must be matched first.
+# PPL numeric codes overlap with ČP; PPL extraction is context-aware and must
+# run before ČP's generic numeric extractor. Allegro waybills contain mixed
+# letters and cannot collide with ČP codes.
 from . import packeta  # noqa: E402,F401
+from . import ppl  # noqa: E402,F401
 from . import ceska_posta  # noqa: E402,F401
 from . import allegro  # noqa: E402,F401

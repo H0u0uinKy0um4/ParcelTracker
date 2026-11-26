@@ -22,11 +22,13 @@ from custom_components.parceltracker.providers import (
 from custom_components.parceltracker.providers.allegro import AllegroProvider
 from custom_components.parceltracker.providers.ceska_posta import CeskaPostaProvider
 from custom_components.parceltracker.providers.packeta import PacketaProvider
+from custom_components.parceltracker.providers.ppl import PplProvider
 
 
 CODE = "DR1234567890C"
 PACKETA_CODE = "Z6027037619"
 ALLEGRO_CODE = "A0069G83L2"
+PPL_CODE = "70201361650"
 
 BACKBONE: dict[str, Any] = {
     CODE: {
@@ -77,13 +79,16 @@ class ProviderTests(unittest.TestCase):
         self.assertIs(detect_provider(CODE), CeskaPostaProvider)
         self.assertEqual(
             [provider.CARRIER_ID for provider in registered_providers()],
-            ["packeta", "ceska_posta", "allegro"],
+            ["packeta", "ppl", "ceska_posta", "allegro"],
         )
         self.assertIsNotNone(get_provider("ceska_posta"))
+        self.assertIsNotNone(get_provider("ppl"))
         self.assertIs(detect_provider(PACKETA_CODE), PacketaProvider)
         self.assertIs(detect_provider(ALLEGRO_CODE), AllegroProvider)
         self.assertTrue(CeskaPostaProvider.match_tracking_code("12345678"))
         self.assertFalse(CeskaPostaProvider.match_tracking_code("NOT-A-CODE"))
+        # PPL numeric codes overlap with ČP; shape match stays ambiguous.
+        self.assertFalse(PplProvider.match_tracking_code(PPL_CODE))
 
     def test_tracking_url(self) -> None:
         self.assertIn(CODE, CeskaPostaProvider().tracking_url(CODE) or "")
@@ -259,6 +264,26 @@ def fake_multi_fetch(
     return fetch
 
 
+PPL_PAYLOAD: dict[str, Any] = {
+    "shipmentNumber": PPL_CODE,
+    "events": [
+        {
+            "code": "PickedUpFromSender",
+            "eventDate": "2026-05-07T10:00:00+02:00",
+            "eventText": "Picked up from sender",
+        },
+        {
+            "code": "OutForDelivery",
+            "eventDate": "2026-05-08T08:30:00+02:00",
+            "eventText": "Out for delivery",
+        },
+    ],
+    "senderName": "Example sender",
+    "recipientName": "Example recipient",
+    "pickupPointName": "PPL Parcelbox",
+}
+
+
 class NewCarrierTests(unittest.TestCase):
     def test_packeta_uses_post_and_maps_events(self) -> None:
         calls: list[tuple[str, str, dict[str, str] | None]] = []
@@ -336,6 +361,79 @@ class NewCarrierTests(unittest.TestCase):
         )
         self.assertIsNotNone(parcels[ALLEGRO_CODE].error)
         self.assertEqual(parcels[ALLEGRO_CODE].events, [])
+
+
+class PplProviderTests(unittest.TestCase):
+    def test_ppl_uses_post_and_maps_events(self) -> None:
+        calls: list[tuple[str, str, dict[str, str] | None]] = []
+
+        async def fetch(
+            url: str,
+            *,
+            method: str = "GET",
+            headers: dict[str, str] | None = None,
+            json: Any = None,
+            **_: Any,
+        ) -> Any:
+            calls.append((method, url, headers))
+            self.assertEqual(json, {})
+            return PPL_PAYLOAD
+
+        parcel = asyncio.run(PplProvider().async_track([PPL_CODE], fetch))[PPL_CODE]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "POST")
+        self.assertIn("/TrackAndTrace/70201361650", calls[0][1])
+        self.assertEqual((calls[0][2] or {}).get("dhl-api-key"), "7HH634Q79Zpge4xEGeFAHXAnUMRxv0XQ")
+        self.assertEqual(parcel.carrier, "ppl")
+        self.assertEqual(parcel.sender, "Example sender")
+        self.assertEqual(parcel.pickup_point, "PPL Parcelbox")
+        self.assertEqual([event["id"] for event in parcel.events], ["21", "53"])
+        self.assertEqual(derive_status(parcel.events), ParcelStatus.OUT_FOR_DELIVERY)
+        canonical = normalize_parcel(parcel, include_history=True)
+        self.assertEqual(canonical["status"], "out_for_delivery")
+        self.assertIn("shipmentId=70201361650", canonical["url"])
+
+    def test_ppl_not_found_400_detail(self) -> None:
+        class FetchError(Exception):
+            def __init__(self) -> None:
+                super().__init__("HTTP 400")
+                self.status = 400
+                self.body = {
+                    "detail": "service.TrackAndTrace.ShipmentNotFound",
+                    "status": 400,
+                }
+
+        async def fetch(*args: Any, **kwargs: Any) -> Any:
+            raise FetchError()
+
+        parcel = asyncio.run(PplProvider().async_track([PPL_CODE], fetch))[PPL_CODE]
+        self.assertTrue(parcel.not_found)
+        self.assertIsNone(parcel.error)
+
+    def test_ppl_other_400_is_error(self) -> None:
+        class FetchError(Exception):
+            def __init__(self) -> None:
+                super().__init__("HTTP 400")
+                self.status = 400
+                self.body = {"detail": "some.other.error", "status": 400}
+
+        async def fetch(*args: Any, **kwargs: Any) -> Any:
+            raise FetchError()
+
+        parcel = asyncio.run(PplProvider().async_track([PPL_CODE], fetch))[PPL_CODE]
+        self.assertFalse(parcel.not_found)
+        self.assertIsNotNone(parcel.error)
+
+    def test_ppl_context_recognition_wins_over_cp_numeric(self) -> None:
+        text = "Odesílatel: PPL\nČíslo zásilky: 70201361650\nppl.cz"
+        recognized = extract_codes_from_text(text)
+        self.assertEqual([(item.carrier, item.code) for item in recognized], [("ppl", PPL_CODE)])
+        self.assertIs(detect_provider(PPL_CODE), CeskaPostaProvider)
+
+    def test_cp_numeric_without_ppl_context_still_works(self) -> None:
+        text = "Číslo balíku: 12345678"
+        recognized = extract_codes_from_text(text)
+        self.assertEqual([(item.carrier, item.code) for item in recognized], [("ceska_posta", "12345678")])
 
 
 if __name__ == "__main__":

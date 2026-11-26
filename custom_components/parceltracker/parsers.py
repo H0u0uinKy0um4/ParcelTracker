@@ -325,10 +325,16 @@ def parse_email_text(
     carrier: str | None = None
     if tracking:
         # Imported lazily: the provider registry imports models, not parsers.
-        from .providers import detect_provider
+        from .providers import detect_provider, extract_codes_from_text
 
-        provider = detect_provider(tracking)
-        carrier = provider.CARRIER_ID if provider else None
+        recognized = extract_codes_from_text(normalized, extra_patterns=patterns)
+        for item in recognized:
+            if item.code == tracking:
+                carrier = item.carrier if item.carrier != "unknown" else None
+                break
+        if carrier is None:
+            provider = detect_provider(tracking)
+            carrier = provider.CARRIER_ID if provider else None
 
     return ParsedEmail(tracking_code=tracking, pickup_code=pickup, carrier=carrier)
 

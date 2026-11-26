@@ -19,7 +19,7 @@ from custom_components.parceltracker.parsers import (
 )
 
 
-EXPECTED_EXAMPLE_MAILS: dict[str, tuple[str, str | None]] = {
+EXPECTED_EXAMPLE_MAILS: dict[str, tuple[str | None, str | None]] = {
     "Potvrzení o převzetí balíku NR0000000000CZ.eml": (
         "NR0000000000CZ",
         "ceska_posta",
@@ -30,6 +30,8 @@ EXPECTED_EXAMPLE_MAILS: dict[str, tuple[str, str | None]] = {
     ),
     "example-packeta.eml": ("Z0000000000", "packeta"),
     "example-allegro.eml": ("A0000G0000", "allegro"),
+    "PPL – Převzali jsme Vaši zásilku.eml": ("70201361650", "ppl"),
+    "Připraveno v AlzaBoxu _ Obj. č. 000001.eml": (None, None),
 }
 
 
@@ -124,7 +126,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parsed.carrier, "ceska_posta")
 
     def test_real_example_mails(self) -> None:
-        """Every provided .eml must parse to its known, anonymised code."""
+        """Every provided .eml must parse to its known, anonymised expectation."""
         path = Path(__file__).resolve().parents[1] / "exampleMails"
         mails = sorted(path.glob("*.eml")) if path.is_dir() else []
         if not mails:
@@ -138,8 +140,11 @@ class ParserTests(unittest.TestCase):
                     message = BytesParser(policy=policy.default).parse(handle)
                 parsed = parse_message(message)
                 self.assertEqual(parsed.tracking_code, expected)
-                self.assertIn(parsed.pickup_code, (None, expected))
                 self.assertEqual(parsed.carrier, carrier)
+                if expected is None:
+                    self.assertIsNone(parsed.pickup_code)
+                else:
+                    self.assertIn(parsed.pickup_code, (None, expected))
                 seen += 1
         self.assertEqual(seen, len(EXPECTED_EXAMPLE_MAILS))
 

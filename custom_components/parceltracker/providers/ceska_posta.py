@@ -24,6 +24,7 @@ from urllib.parse import quote
 
 from ..models import ProviderParcel
 from . import JsonFetcher, dedupe_codes, register_provider
+from .ppl import has_ppl_context
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -146,8 +147,11 @@ class CeskaPostaProvider:
             add(match.group(0), False)
         for match in _TEXT_CODE_RE.finditer(upper):
             add(match.group(0), False)
-        for match in _TEXT_NUMERIC_RE.finditer(upper):
-            add(match.group(0), True)
+        # Plain numerics overlap with PPL; PPL-context mail must not be claimed
+        # as Česká pošta. Alphanumeric/postal CP shapes remain unaffected.
+        if not has_ppl_context(text):
+            for match in _TEXT_NUMERIC_RE.finditer(upper):
+                add(match.group(0), True)
         return found
 
     def tracking_url(self, code: str) -> str | None:
